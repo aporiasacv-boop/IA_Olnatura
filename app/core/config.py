@@ -48,6 +48,51 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 10
     DB_POOL_PRE_PING: bool = True
 
+    # --- Dynamics 365 Finance & Operations (OData) ---
+    D365_BASE_URL: str = "https://example.operations.dynamics.com/data"
+    D365_TENANT_ID: str = ""
+    D365_CLIENT_ID: str = ""
+    D365_CLIENT_SECRET: str = ""
+    D365_TOKEN_URL: str = ""
+    D365_OAUTH_SCOPE: str = ""
+    D365_HEALTH_ENTITY: str = "Companies"
+    D365_REQUEST_TIMEOUT: float = 30.0
+    D365_CLIENTES_ENTITY: str = "CustomersV3"
+    D365_VENTAS_ENTITY: str = "SalesOrderHeadersV2"
+
+    # --- ETL ---
+    ETL_PAGE_SIZE: int = 100
+    ETL_MAX_RETRIES: int = 3
+    ETL_RETRY_BASE_DELAY: float = 1.0
+
+    # --- Ollama (LLM local) ---
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+    OLLAMA_REQUEST_TIMEOUT: float = 120.0
+
+    # --- RAG (ChromaDB + LangChain) ---
+    CHROMA_PERSIST_DIR: str = "./data/chroma"
+    CHROMA_COLLECTION_NAME: str = "olnatura_documents"
+    RAG_CHUNK_SIZE: int = 1000
+    RAG_CHUNK_OVERLAP: int = 200
+    RAG_TOP_K: int = 4
+
+    @property
+    def d365_token_url(self) -> str:
+        """URL del endpoint OAuth de Azure AD."""
+        if self.D365_TOKEN_URL:
+            return self.D365_TOKEN_URL
+        return f"https://login.microsoftonline.com/{self.D365_TENANT_ID}/oauth2/v2.0/token"
+
+    @property
+    def d365_oauth_scope(self) -> str:
+        """Scope OAuth para client credentials (.default)."""
+        if self.D365_OAUTH_SCOPE:
+            return self.D365_OAUTH_SCOPE
+        resource_url = self.D365_BASE_URL.removesuffix("/data").rstrip("/")
+        return f"{resource_url}/.default"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -30,6 +30,9 @@ htmlcov/
 *.swp
 *.swo
 
+# Datos locales
+data/
+
 # Sistema operativo
 .DS_Store
 Thumbs.db

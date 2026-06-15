@@ -1,15 +1,18 @@
 """
 Rutas principales de la aplicación mínima.
 
-Expone los endpoints raíz GET / y GET /health.
+Expone los endpoints raíz GET /, GET /health y GET /db-health.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
+from app.api.deps import DbSession
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.schemas.db_health import DbHealthResponse
 from app.schemas.health import HealthResponse
 from app.schemas.root import RootResponse
+from app.services.db_health import DbHealthService
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -46,3 +49,28 @@ def health_check() -> HealthResponse:
         app_name=settings.APP_NAME,
         version=settings.APP_VERSION,
     )
+
+
+@router.get(
+    "/db-health",
+    response_model=DbHealthResponse,
+    summary="Verificar conexión a PostgreSQL",
+    tags=["Health"],
+)
+def db_health_check(db: DbSession) -> DbHealthResponse:
+    """
+    Ejecuta SELECT 1 contra PostgreSQL para validar conectividad.
+
+    Retorna 503 si la base de datos no responde.
+    """
+    logger.debug("DB health check solicitado")
+    service = DbHealthService(db)
+
+    if not service.is_connected():
+        logger.error("PostgreSQL no respondió correctamente a SELECT 1")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        )
+
+    return DbHealthResponse(database="connected")

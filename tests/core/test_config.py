@@ -23,3 +23,24 @@ def test_get_settings_returns_singleton() -> None:
     second = get_settings()
     assert first is second
     get_settings.cache_clear()
+
+
+def test_d365_oauth_scope_is_derived_from_base_url() -> None:
+    """Verifica derivación automática del scope OAuth."""
+    config = Settings(
+        D365_BASE_URL="https://prod.operations.dynamics.com/data",
+        D365_OAUTH_SCOPE="",
+    )
+    assert config.d365_oauth_scope == "https://prod.operations.dynamics.com/.default"
+
+
+def test_d365_token_url_is_derived_from_tenant_id() -> None:
+    """Verifica derivación automática de la URL del token OAuth."""
+    config = Settings(
+        D365_TENANT_ID="abc-123",
+        D365_TOKEN_URL="",
+    )
+    assert (
+        config.d365_token_url
+        == "https://login.microsoftonline.com/abc-123/oauth2/v2.0/token"
+    )
