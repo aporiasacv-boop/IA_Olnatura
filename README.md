@@ -151,6 +151,42 @@ Consultar `.env.example` para la lista completa de variables. Las principales so
 
 Aplicación FastAPI mínima operativa con endpoints `/` y `/health`, configuración centralizada y logging básico.
 
+## Configuración de GitHub
+
+El proyecto ya tiene Git inicializado con un commit en la rama `main`. Para publicarlo en GitHub y poder hacer commits libremente:
+
+### 1. Autenticarse en GitHub CLI
+
+```powershell
+gh auth login
+```
+
+Sigue el asistente (GitHub.com → HTTPS → Login con navegador).
+
+### 2. Crear el repositorio remoto y subir el código
+
+```powershell
+cd "C:\Users\BecarioQR\OneDrive - OLNATURA, S.A. DE CV\Escritorio\IA_Olnatura"
+
+# Crear repo privado en tu cuenta (cambia --public si lo prefieres público)
+gh repo create IA_Olnatura --private --source=. --remote=origin --push
+```
+
+Si el repositorio ya existe en GitHub, solo conecta y sube:
+
+```powershell
+git remote add origin https://github.com/TU_USUARIO/IA_Olnatura.git
+git push -u origin main
+```
+
+### 3. Trabajar con commits
+
+```powershell
+git add .
+git commit -m "Descripcion del cambio"
+git push
+```
+
 ## Licencia
 
 Uso interno — Olnatura, S.A. de C.V.
