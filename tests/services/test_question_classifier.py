@@ -1,33 +1,46 @@
-"""
-Pruebas del clasificador de preguntas empresariales.
-"""
-
-from app.domain.chat import QuestionCategory
+from app.domain.chat import ChatIntent, QuestionCategory
 from app.services.question_classifier import QuestionClassifier
 
-
 def test_classify_ventas_question() -> None:
-    """Verifica clasificación de preguntas sobre ventas."""
     classifier = QuestionClassifier()
-    assert classifier.classify("¿Cuáles fueron las ventas del mes?") == QuestionCategory.VENTAS
-
+    assert classifier.classify('¿Cuáles fueron las ventas del mes?') == QuestionCategory.VENTAS
 
 def test_classify_clientes_question() -> None:
-    """Verifica clasificación de preguntas sobre clientes."""
     classifier = QuestionClassifier()
-    assert classifier.classify("¿Cuántos clientes tenemos?") == QuestionCategory.CLIENTES
-
+    assert classifier.classify('¿Cuántos clientes tenemos?') == QuestionCategory.CLIENTES
 
 def test_classify_general_question() -> None:
-    """Verifica clasificación de preguntas generales."""
     classifier = QuestionClassifier()
-    assert classifier.classify("¿Qué es un ERP?") == QuestionCategory.GENERAL
-
+    assert classifier.classify('¿Qué es un ERP?') == QuestionCategory.GENERAL
 
 def test_ventas_takes_priority_over_clientes() -> None:
-    """Verifica que ventas tiene prioridad si ambas palabras clave aparecen."""
     classifier = QuestionClassifier()
-    assert (
-        classifier.classify("¿Cuáles clientes generaron más ventas?")
-        == QuestionCategory.VENTAS
-    )
+    assert classifier.classify('¿Cuáles clientes generaron más ventas?') == QuestionCategory.VENTAS
+
+def test_resolve_intent_customers_count() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent('¿Cuántos clientes tenemos?') == ChatIntent.CUSTOMERS_COUNT
+
+def test_resolve_intent_sales_count() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent('¿Cuántos pedidos tenemos?') == ChatIntent.SALES_COUNT
+
+def test_resolve_intent_sales_total_amount() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent('¿Cuál es el monto total vendido?') == ChatIntent.SALES_TOTAL_AMOUNT
+
+def test_resolve_intent_average_ticket() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent('¿Cuál es el ticket promedio?') == ChatIntent.SALES_AVERAGE_TICKET
+
+def test_resolve_intent_top_customers() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent('¿Quiénes son nuestros principales clientes?') == ChatIntent.TOP_CUSTOMERS
+
+def test_resolve_intent_unknown() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent('¿Qué es un ERP?') == ChatIntent.UNKNOWN
+
+def test_top_customers_takes_priority_over_customers_count() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent('¿Cuáles son los mejores clientes?') == ChatIntent.TOP_CUSTOMERS

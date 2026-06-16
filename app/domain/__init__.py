@@ -1,1 +1,1 @@
-"""Modelos de dominio de negocio."""
+pass

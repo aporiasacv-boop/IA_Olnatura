@@ -1,1 +1,1 @@
-"""Rutas de consultas empresariales."""
+pass

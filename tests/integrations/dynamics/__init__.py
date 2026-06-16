@@ -1,1 +1,1 @@
-"""Pruebas de integraciones Dynamics 365."""
+pass

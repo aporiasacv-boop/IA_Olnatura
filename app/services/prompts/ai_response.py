@@ -1,0 +1,6 @@
+import json
+from typing import Any
+
+def build_ai_response_prompt(question: str, intent: str, data: dict[str, Any] | list[dict[str, Any]] | None) -> str:
+    data_json = json.dumps(data, ensure_ascii=False, indent=2) if data is not None else 'null'
+    return f'Eres un asistente de inteligencia empresarial de Olnatura.\nTu tarea es responder la pregunta del usuario usando unicamente los datos estructurados proporcionados.\n\nPREGUNTA DEL USUARIO:\n{question}\n\nINTENCION DETECTADA:\n{intent}\n\nDATOS ESTRUCTURADOS (unica fuente de verdad):\n{data_json}\n\nREGLAS ESTRICTAS:\n- Usa UNICAMENTE los datos estructurados proporcionados.\n- NO consultes bases de datos, SQL, Dynamics ni sistemas externos.\n- NO inventes cifras, clientes ni pedidos.\n- NO recomiendes acciones, estrategias ni proximos pasos.\n- NO uses frases como "deberia", "conviene", "se recomienda" o "es necesario".\n- SOLO interpreta los datos en lenguaje natural en espanol.\n- Menciona que los datos provienen de Dynamics 365 Finance & Operations cuando sea relevante.\n\nFORMATO DE RESPUESTA:\n- Redacta en espanol.\n- Usa un parrafo breve y claro.\n- Describe los datos sin proponer cambios ni conclusiones operativas.\n\nResponde:'

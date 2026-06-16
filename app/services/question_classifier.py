@@ -1,57 +1,36 @@
-"""
-Clasificador de preguntas empresariales.
-
-Identifica si una consulta pertenece a ventas, clientes o general
-mediante reglas de palabras clave (desacoplado del orquestador).
-"""
-
-from app.domain.chat import QuestionCategory
-
+from dataclasses import dataclass
+from typing import Any
+import unicodedata
+from app.domain.chat import ChatIntent, QuestionCategory
 
 class QuestionClassifier:
-    """Clasifica preguntas en categorías empresariales."""
-
-    _VENTAS_KEYWORDS = (
-        "venta",
-        "ventas",
-        "factur",
-        "ingreso",
-        "ingresos",
-        "monto",
-        "pedido",
-        "pedidos",
-        "orden",
-        "ordenes",
-        "facturación",
-        "facturacion",
-    )
-
-    _CLIENTES_KEYWORDS = (
-        "cliente",
-        "clientes",
-        "comprador",
-        "compradores",
-        "cartera",
-    )
+    _VENTAS_KEYWORDS = ('venta', 'ventas', 'factur', 'ingreso', 'ingresos', 'monto', 'pedido', 'pedidos', 'orden', 'ordenes', 'facturacion')
+    _CLIENTES_KEYWORDS = ('cliente', 'clientes', 'comprador', 'compradores', 'cartera')
+    _TOP_KEYWORDS = ('principal', 'principales', 'mejor', 'mejores', 'top')
+    _CLIENT_WORDS = ('cliente', 'clientes')
 
     def classify(self, question: str) -> QuestionCategory:
-        """
-        Determina la categoría de una pregunta.
-
-        Prioridad: ventas > clientes > general.
-
-        Args:
-            question: Texto de la pregunta del usuario.
-
-        Returns:
-            QuestionCategory correspondiente.
-        """
-        normalized = question.lower()
-
-        if any(keyword in normalized for keyword in self._VENTAS_KEYWORDS):
+        normalized = self._normalize(question)
+        if any((keyword in normalized for keyword in self._VENTAS_KEYWORDS)):
             return QuestionCategory.VENTAS
-
-        if any(keyword in normalized for keyword in self._CLIENTES_KEYWORDS):
+        if any((keyword in normalized for keyword in self._CLIENTES_KEYWORDS)):
             return QuestionCategory.CLIENTES
-
         return QuestionCategory.GENERAL
+
+    def resolve_intent(self, question: str) -> ChatIntent:
+        normalized = self._normalize(question)
+        if any(keyword in normalized for keyword in self._TOP_KEYWORDS) and any(word in normalized for word in self._CLIENT_WORDS):
+            return ChatIntent.TOP_CUSTOMERS
+        if 'cuantos clientes' in normalized or 'numero de clientes' in normalized or 'total de clientes' in normalized:
+            return ChatIntent.CUSTOMERS_COUNT
+        if 'ticket promedio' in normalized or ('promedio' in normalized and any(word in normalized for word in ('pedido', 'pedidos', 'orden', 'ordenes', 'ticket'))):
+            return ChatIntent.SALES_AVERAGE_TICKET
+        if 'monto total' in normalized or 'total vendido' in normalized or ('total' in normalized and 'vendid' in normalized):
+            return ChatIntent.SALES_TOTAL_AMOUNT
+        if 'cuantos pedidos' in normalized or 'numero de pedidos' in normalized or 'total de pedidos' in normalized:
+            return ChatIntent.SALES_COUNT
+        return ChatIntent.UNKNOWN
+
+    def _normalize(self, question: str) -> str:
+        lowered = question.lower().strip()
+        return ''.join((character for character in unicodedata.normalize('NFD', lowered) if unicodedata.category(character) != 'Mn'))

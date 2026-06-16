@@ -1,1 +1,1 @@
-"""Pruebas del módulo core."""
+pass

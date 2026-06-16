@@ -1,1 +1,1 @@
-"""Pruebas del módulo db."""
+pass

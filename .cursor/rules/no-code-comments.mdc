@@ -1,0 +1,28 @@
+---
+description: Prohibir comentarios y docstrings en código Python del proyecto
+globs: **/*.py
+alwaysApply: true
+---
+
+# Sin comentarios en el código
+
+No agregar comentarios ni docstrings en archivos Python de `app/`, `tests/` ni `scripts/`.
+
+## Prohibido
+
+- Comentarios de línea con `#`
+- Docstrings `"""..."""` o `'''...'''`
+- Bloques de comentarios multilínea
+
+## Permitido
+
+- Código funcional únicamente
+- Nombres claros de variables, funciones y clases
+- Metadatos de API en decoradores FastAPI (`summary`, `tags`, `description` en `Query`/`Field`)
+- Strings literales que formen parte de la lógica (prompts, mensajes de error, SQL)
+
+## Al editar código existente
+
+- No reintroducir comentarios al refactorizar
+- Si se elimina lógica, borrar el código; no dejar comentarios explicativos
+- Preferir extraer funciones con nombres descriptivos en lugar de documentar con comentarios

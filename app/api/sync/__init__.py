@@ -1,1 +1,1 @@
-"""Rutas de sincronización ETL."""
+pass

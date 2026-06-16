@@ -1,1 +1,1 @@
-"""Rutas de documentos RAG."""
+pass

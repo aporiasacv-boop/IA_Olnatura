@@ -1,1 +1,1 @@
-"""Rutas de chat empresarial."""
+pass

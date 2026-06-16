@@ -1,1 +1,1 @@
-"""Rutas de inteligencia artificial."""
+pass

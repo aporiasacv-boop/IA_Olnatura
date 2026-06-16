@@ -1,1 +1,1 @@
-"""Sistema RAG con LangChain y ChromaDB."""
+pass

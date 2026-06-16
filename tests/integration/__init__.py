@@ -1,1 +1,1 @@
-"""Pruebas de integración."""
+pass

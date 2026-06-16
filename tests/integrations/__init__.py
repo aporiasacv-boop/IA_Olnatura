@@ -1,1 +1,1 @@
-"""Pruebas de integraciones externas."""
+pass
