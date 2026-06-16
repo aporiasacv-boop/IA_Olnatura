@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
     RAG_TOP_K: int = 4
+    DOCUMENTS_DIR: str = './data/documents'
 
     @property
     def d365_token_url(self) -> str:

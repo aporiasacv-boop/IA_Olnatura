@@ -1,19 +1,29 @@
-from typing import Any
 from pydantic import BaseModel, Field
 
 class DocumentIndexResponse(BaseModel):
-    filename: str = Field(..., description='Nombre del archivo indexado')
-    chunks_indexed: int = Field(..., description='Cantidad de fragmentos indexados')
-    status: str = Field(..., description='Estado de la indexación')
+    documents: int = Field(..., description='Documentos presentes en el indice')
+    chunks: int = Field(..., description='Fragmentos indexados en la ejecucion actual')
+    status: str = Field(..., description='Estado de la indexacion')
 
 class DocumentQueryRequest(BaseModel):
-    question: str = Field(..., min_length=1, description='Pregunta sobre el contenido indexado', examples=['¿Cuál es la política de ventas?'])
-    top_k: int | None = Field(None, ge=1, le=20, description='Cantidad de fragmentos a recuperar (default: configuración RAG)')
+    query: str = Field(..., min_length=1, description='Consulta semantica sobre documentos indexados', examples=['objeto social de la empresa'])
+    top_k: int | None = Field(None, ge=1, le=20, description='Cantidad de fragmentos a recuperar')
 
-class SourceChunkResponse(BaseModel):
-    content: str = Field(..., description='Texto del fragmento')
-    metadata: dict[str, Any] = Field(default_factory=dict, description='Metadatos del fragmento')
+class SemanticSearchResultItem(BaseModel):
+    document: str = Field(..., description='Nombre del documento fuente')
+    score: float = Field(..., description='Puntuacion de similitud normalizada')
+    content: str = Field(..., description='Fragmento recuperado')
 
 class DocumentQueryResponse(BaseModel):
-    answer: str = Field(..., description='Respuesta generada por el LLM')
-    sources: list[SourceChunkResponse] = Field(default_factory=list, description='Fragmentos recuperados como contexto')
+    query: str = Field(..., description='Consulta realizada')
+    results: list[SemanticSearchResultItem] = Field(default_factory=list, description='Resultados semanticos ordenados por relevancia')
+
+class DocumentsListResponse(BaseModel):
+    documents: list[str] = Field(default_factory=list, description='Nombres de archivos en el catalogo')
+
+class DocumentPreviewResponse(BaseModel):
+    document: str = Field(..., description='Nombre del documento')
+    preview: str = Field(..., description='Primeros caracteres del contenido extraido')
+
+class DocumentsReloadResponse(BaseModel):
+    documents: list[str] = Field(default_factory=list, description='Catalogo actualizado tras el reescaneo')

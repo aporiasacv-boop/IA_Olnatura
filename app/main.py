@@ -5,6 +5,7 @@ from app.api.dynamics.routes import router as dynamics_router
 from app.api.sync.routes import router as sync_router
 from app.api.analytics.routes import router as analytics_router
 from app.api.ai.routes import router as ai_router
+from app.api.assistant.routes import router as assistant_router
 from app.api.chat.routes import router as chat_router
 from app.api.documents.routes import router as documents_router
 from app.core.config import settings
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     application.include_router(analytics_router, prefix='/analytics')
     application.include_router(ai_router, prefix='/ai')
     application.include_router(chat_router, prefix='/chat')
+    application.include_router(assistant_router, prefix='/assistant')
     application.include_router(documents_router, prefix='/documents')
     return application
 app = create_app()

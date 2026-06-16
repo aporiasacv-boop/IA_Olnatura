@@ -1,50 +1,61 @@
-import tempfile
-from pathlib import Path
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from app.api.deps import get_rag_service
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api.deps import get_document_loader_service, get_semantic_search_service
 from app.core.logging import get_logger
+from app.documents.exceptions import DocumentLoaderError, DocumentNotFoundError
 from app.integrations.ollama.exceptions import OllamaError
-from app.rag.exceptions import RAGError, UnsupportedDocumentError
-from app.rag.loaders import validate_extension
-from app.schemas.documents import DocumentIndexResponse, DocumentQueryRequest, DocumentQueryResponse, SourceChunkResponse
-from app.services.rag_service import RAGService
+from app.rag.exceptions import RAGError
+from app.schemas.documents import DocumentIndexResponse, DocumentPreviewResponse, DocumentQueryRequest, DocumentQueryResponse, DocumentsListResponse, DocumentsReloadResponse, SemanticSearchResultItem
+from app.services.document_loader_service import DocumentLoaderService
+from app.services.semantic_search_service import SemanticSearchService
+
 router = APIRouter()
 logger = get_logger(__name__)
 
-@router.post('/index', response_model=DocumentIndexResponse, summary='Indexar documento PDF o DOCX', tags=['Documents'])
-async def index_document(file: UploadFile=File(..., description='Archivo PDF o DOCX a indexar'), service: RAGService=Depends(get_rag_service)) -> DocumentIndexResponse:
-    if not file.filename:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El archivo debe incluir nombre.')
-    try:
-        validate_extension(file.filename)
-    except UnsupportedDocumentError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from exc
-    suffix = Path(file.filename).suffix.lower()
-    logger.info('Indexando documento: %s', file.filename)
-    tmp_path: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
-        result = service.index_file(tmp_path, file.filename)
-    except RAGError as exc:
-        logger.error('Error indexando documento: %s', exc.message)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
-    finally:
-        if tmp_path:
-            Path(tmp_path).unlink(missing_ok=True)
-    return DocumentIndexResponse(filename=result.filename, chunks_indexed=result.chunks_indexed, status=result.status)
+@router.get('', response_model=DocumentsListResponse, summary='Listar documentos del catalogo', tags=['Documents'])
+def list_documents(service: DocumentLoaderService=Depends(get_document_loader_service)) -> DocumentsListResponse:
+    return DocumentsListResponse(documents=service.list_documents())
 
-@router.post('/query', response_model=DocumentQueryResponse, summary='Consultar documentos indexados (RAG)', tags=['Documents'])
-def query_documents(request: DocumentQueryRequest, service: RAGService=Depends(get_rag_service)) -> DocumentQueryResponse:
-    logger.info('Consulta RAG recibida')
+@router.get('/preview', response_model=DocumentPreviewResponse, summary='Vista previa de un documento', tags=['Documents'])
+def preview_document(name: str=Query(..., min_length=1, description='Nombre del documento'), service: DocumentLoaderService=Depends(get_document_loader_service)) -> DocumentPreviewResponse:
     try:
-        result = service.query(request.question, top_k=request.top_k)
+        document_name, preview = service.preview(name)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except DocumentLoaderError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
+    return DocumentPreviewResponse(document=document_name, preview=preview)
+
+@router.post('/reload', response_model=DocumentsReloadResponse, summary='Reescanear carpeta de documentos', tags=['Documents'])
+def reload_documents(service: DocumentLoaderService=Depends(get_document_loader_service)) -> DocumentsReloadResponse:
+    logger.info('Reescaneo de documentos solicitado via POST /documents/reload')
+    documents = service.reload()
+    return DocumentsReloadResponse(documents=documents)
+
+@router.post('/index', response_model=DocumentIndexResponse, summary='Indexar documentos de data/documents en ChromaDB', tags=['Documents'])
+def index_documents(service: SemanticSearchService=Depends(get_semantic_search_service)) -> DocumentIndexResponse:
+    logger.info('Indexacion semantica solicitada via POST /documents/index')
+    try:
+        result = service.index_all()
+    except DocumentLoaderError as exc:
+        logger.error('Error extrayendo texto para indexacion: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
+    except RAGError as exc:
+        logger.error('Error indexando documentos: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
     except OllamaError as exc:
-        logger.error('Error LLM en consulta RAG: %s', exc.message)
+        logger.error('Error de embeddings en indexacion: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.message) from exc
+    return DocumentIndexResponse(documents=result.documents, chunks=result.chunks, status=result.status)
+
+@router.post('/query', response_model=DocumentQueryResponse, summary='Busqueda semantica sobre documentos indexados', tags=['Documents'])
+def query_documents(request: DocumentQueryRequest, service: SemanticSearchService=Depends(get_semantic_search_service)) -> DocumentQueryResponse:
+    logger.info('Consulta semantica recibida via POST /documents/query')
+    try:
+        result = service.search(request.query, top_k=request.top_k)
+    except OllamaError as exc:
+        logger.error('Error de embeddings en consulta semantica: %s', exc.message)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.message) from exc
     except RAGError as exc:
-        logger.error('Error en consulta RAG: %s', exc.message)
+        logger.error('Error en consulta semantica: %s', exc.message)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
-    return DocumentQueryResponse(answer=result.answer, sources=[SourceChunkResponse(content=source.content, metadata=source.metadata) for source in result.sources])
+    return DocumentQueryResponse(query=result.query, results=[SemanticSearchResultItem(document=item.document, score=item.score, content=item.content) for item in result.results])

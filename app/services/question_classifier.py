@@ -8,6 +8,11 @@ class QuestionClassifier:
     _CLIENTES_KEYWORDS = ('cliente', 'clientes', 'comprador', 'compradores', 'cartera')
     _TOP_KEYWORDS = ('principal', 'principales', 'mejor', 'mejores', 'top')
     _CLIENT_WORDS = ('cliente', 'clientes')
+    _DOCUMENT_SIGNAL_KEYWORDS = (
+        'procedimiento', 'proceso', 'como se', 'registran', 'registro', 'manual',
+        'politica', 'norma', 'documento', 'acta', 'instructivo', 'guia', 'pasos',
+        'requisito', 'objeto social', 'contrato', 'reglamento', 'flujo', 'protocolo',
+    )
 
     def classify(self, question: str) -> QuestionCategory:
         normalized = self._normalize(question)
@@ -30,6 +35,13 @@ class QuestionClassifier:
         if 'cuantos pedidos' in normalized or 'numero de pedidos' in normalized or 'total de pedidos' in normalized:
             return ChatIntent.SALES_COUNT
         return ChatIntent.UNKNOWN
+
+    def is_hybrid(self, question: str) -> bool:
+        intent = self.resolve_intent(question)
+        if intent is ChatIntent.UNKNOWN:
+            return False
+        normalized = self._normalize(question)
+        return any(keyword in normalized for keyword in self._DOCUMENT_SIGNAL_KEYWORDS)
 
     def _normalize(self, question: str) -> str:
         lowered = question.lower().strip()

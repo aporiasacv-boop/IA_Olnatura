@@ -44,3 +44,16 @@ def test_resolve_intent_unknown() -> None:
 def test_top_customers_takes_priority_over_customers_count() -> None:
     classifier = QuestionClassifier()
     assert classifier.resolve_intent('¿Cuáles son los mejores clientes?') == ChatIntent.TOP_CUSTOMERS
+
+def test_is_hybrid_when_analytics_intent_and_document_signal() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_hybrid('¿Cuántos clientes tenemos y cómo se registran?') is True
+    assert classifier.is_hybrid('¿Cuál es el ticket promedio y cuál es el procedimiento de ventas?') is True
+
+def test_is_hybrid_false_for_analytics_only() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_hybrid('¿Cuántos clientes tenemos?') is False
+
+def test_is_hybrid_false_for_documents_only() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_hybrid('¿Cuál es el procedimiento de ventas?') is False
