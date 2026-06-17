@@ -67,3 +67,10 @@ def test_top_customers_respects_limit(analytics_db: Session) -> None:
 def test_top_customers_returns_empty_for_zero_limit(analytics_db: Session) -> None:
     repo = AnalyticsRepository(analytics_db)
     assert repo.top_customers(limit=0) == []
+
+def test_sales_date_range_returns_min_and_max(analytics_db: Session) -> None:
+    from datetime import date
+    repo = AnalyticsRepository(analytics_db)
+    start_date, end_date = repo.sales_date_range()
+    assert start_date == date(2025, 5, 20)
+    assert end_date == date(2025, 6, 15)

@@ -1,5 +1,6 @@
 from app.domain.chat import ChatIntent, QuestionCategory
 from app.services.question_classifier import QuestionClassifier
+import pytest
 
 def test_classify_ventas_question() -> None:
     classifier = QuestionClassifier()
@@ -57,3 +58,25 @@ def test_is_hybrid_false_for_analytics_only() -> None:
 def test_is_hybrid_false_for_documents_only() -> None:
     classifier = QuestionClassifier()
     assert classifier.is_hybrid('¿Cuál es el procedimiento de ventas?') is False
+
+@pytest.mark.parametrize('question', [
+    '¿Cómo está distribuida nuestra cartera?',
+    '¿Qué observas en las ventas?',
+    'Dame un resumen ejecutivo de ventas',
+    '¿Quién concentra más compras?',
+])
+def test_is_analytics_question_for_executive_prompts(question: str) -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_analytics_question(question) is True
+    assert classifier.resolve_intent(question) in (ChatIntent.UNKNOWN, ChatIntent.TOP_CUSTOMERS)
+
+@pytest.mark.parametrize('question', [
+    '¿Cuál es el cliente que más compra?',
+    'Muéstrame los clientes más importantes',
+    'Clientes principales',
+    'Mejores clientes',
+    'Top clientes',
+])
+def test_resolve_intent_top_customers_synonyms(question: str) -> None:
+    classifier = QuestionClassifier()
+    assert classifier.resolve_intent(question) == ChatIntent.TOP_CUSTOMERS

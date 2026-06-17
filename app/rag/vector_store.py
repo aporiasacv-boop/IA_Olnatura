@@ -29,6 +29,9 @@ class ChromaVectorStore:
         collection = self._store._collection
         collection.delete(where={'source': document_name})
 
+    def count_chunks(self) -> int:
+        return int(self._store._collection.count())
+
     @staticmethod
     def _build_chunk_id(document: Document, index: int) -> str:
         source = str(document.metadata.get('source', 'document'))

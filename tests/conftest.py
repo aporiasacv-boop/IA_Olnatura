@@ -10,9 +10,13 @@ from sqlalchemy.pool import StaticPool
 from app.db.session import get_db
 from app.main import app
 from app.models.base import Base
-from app.models import cliente, venta
+from app.models import cliente, user, venta
 from app.models.cliente import Cliente
 from app.models.venta import Venta
+
+@pytest.fixture(autouse=True)
+def disable_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr('app.core.config.settings.AUTH_ENABLED', False)
 
 @pytest.fixture
 def client() -> TestClient:

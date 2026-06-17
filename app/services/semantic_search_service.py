@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from langchain_core.documents import Document
@@ -27,17 +28,20 @@ class SemanticSearchResult:
 
 class SemanticSearchService:
 
-    def __init__(self, vector_store: VectorStoreProtocol, documents_dir: Path, app_settings: Settings | None=None):
+    def __init__(self, vector_store: VectorStoreProtocol, documents_dir: Path, app_settings: Settings | None=None, logger: logging.Logger | None=None):
         self._vector_store = vector_store
         self._documents_dir = documents_dir
         self._settings = app_settings or settings
         manifest_path = Path(self._settings.CHROMA_PERSIST_DIR) / 'index_manifest.json'
         self._manifest_store = IndexManifestStore(manifest_path)
+        self._logger = logger or logging.getLogger(__name__)
 
     def index_all(self) -> SemanticIndexResult:
         self._documents_dir.mkdir(parents=True, exist_ok=True)
-        manifest = self._manifest_store.load()
+        manifest = self._load_manifest()
         current_files = {path.name for path in self._iter_document_files()}
+        if not current_files:
+            self._logger.warning('No hay documentos indexables en %s', self._documents_dir)
         for stale_name in list(manifest.keys()):
             if stale_name not in current_files:
                 self._vector_store.delete_by_document(stale_name)
@@ -60,7 +64,21 @@ class SemanticSearchService:
             manifest[file_path.name] = file_hash
             documents_indexed += 1
         self._manifest_store.save(manifest)
+        self._logger.info(
+            'Indexacion completada documents=%s chunks_nuevos=%s total_chunks=%s',
+            len(manifest),
+            chunks_indexed,
+            self._vector_store.count_chunks(),
+        )
         return SemanticIndexResult(documents=len(manifest), chunks=chunks_indexed, status='indexed')
+
+    def _load_manifest(self) -> dict[str, str]:
+        manifest = self._manifest_store.load()
+        if manifest and self._vector_store.count_chunks() == 0:
+            self._logger.warning('Manifest con entradas pero coleccion Chroma vacia; reiniciando indexacion')
+            self._manifest_store.save({})
+            return {}
+        return manifest
 
     def search(self, query: str, top_k: int | None=None) -> SemanticSearchResult:
         limit = top_k if top_k is not None else self._settings.RAG_TOP_K

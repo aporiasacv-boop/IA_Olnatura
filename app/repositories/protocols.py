@@ -1,4 +1,5 @@
 from typing import Protocol
+from datetime import date
 from app.domain.analytics import ClienteVentas, SalesByStatus, SalesSummary, TopCustomer, TotalVentasMes
 
 class AnalyticsRepositoryProtocol(Protocol):
@@ -25,4 +26,7 @@ class AnalyticsRepositoryProtocol(Protocol):
         ...
 
     def top_customers(self, limit: int) -> list[TopCustomer]:
+        ...
+
+    def sales_date_range(self) -> tuple[date | None, date | None]:
         ...

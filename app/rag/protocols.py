@@ -14,6 +14,9 @@ class VectorStoreProtocol(Protocol):
 
     def delete_by_document(self, document_name: str) -> None:
         ...
+    
+    def count_chunks(self) -> int:
+        ...
 
 class DocumentLoaderProtocol(Protocol):
 

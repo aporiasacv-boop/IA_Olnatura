@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 from sqlalchemy import extract, func, select
 from sqlalchemy.orm import Session
 from app.domain.analytics import ClienteVentas, SalesByStatus, SalesSummary, TopCustomer, TotalVentasMes
@@ -50,3 +51,7 @@ class AnalyticsRepository:
         stmt = select(Venta.cliente_dynamics_id, Cliente.nombre, func.count(Venta.id), func.coalesce(func.sum(Venta.monto), 0)).outerjoin(Cliente, Venta.cliente_dynamics_id == Cliente.dynamics_id).group_by(Venta.cliente_dynamics_id, Cliente.nombre).order_by(func.sum(Venta.monto).desc()).limit(limit)
         rows = self._db.execute(stmt).all()
         return [TopCustomer(customer_account=row[0], customer_name=row[1], orders=int(row[2]), total_amount=Decimal(str(row[3]))) for row in rows]
+
+    def sales_date_range(self) -> tuple[date | None, date | None]:
+        start_date, end_date = self._db.execute(select(func.min(Venta.fecha), func.max(Venta.fecha))).one()
+        return start_date, end_date

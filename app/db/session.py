@@ -18,6 +18,6 @@ def ping_database(db: Session) -> bool:
     return result == 1
 
 def init_db() -> None:
-    from app.models import cliente, venta
-    from app.models.base import Base
-    Base.metadata.create_all(bind=engine)
+    from app.db.schema import ensure_database_schema
+    from app.models import cliente, user, venta, venta_linea
+    ensure_database_schema(engine)

@@ -55,3 +55,21 @@ def test_generate_hybrid_builds_fused_prompt() -> None:
     assert 'CONTEXTO FUSIONADO' in prompt
     assert 'customers_count' in prompt
     assert 'Manual.pdf' in prompt
+
+def test_generate_business_analysis_builds_analyst_prompt() -> None:
+    llm = MagicMock()
+    llm.generate.return_value = 'La cartera presenta concentracion relevante en pocos clientes.'
+    service = AIResponseService(llm)
+    snapshot = {
+        'summary': {'total_customers': 100, 'total_orders': 100},
+        'insights': {'largest_customer_share': 42.5},
+    }
+    answer = service.generate_business_analysis(
+        question='Dame un resumen ejecutivo de ventas',
+        snapshot=snapshot,
+    )
+    assert 'concentracion' in answer
+    prompt = llm.generate.call_args.args[0]
+    assert 'analista empresarial senior' in prompt
+    assert 'SNAPSHOT EMPRESARIAL' in prompt
+    assert 'largest_customer_share' in prompt

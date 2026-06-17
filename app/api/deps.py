@@ -2,7 +2,7 @@ from collections.abc import Generator
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
@@ -12,16 +12,22 @@ from app.integrations.ollama.factory import create_ollama_client
 from app.integrations.ollama.client import OllamaClient
 from app.rag.factory import create_embeddings, create_vector_store
 from app.repositories.analytics_repository import AnalyticsRepository
+from app.repositories.financial_analytics_repository import FinancialAnalyticsRepository
+from app.repositories.user_repository import UserRepository
 from app.services.ai_service import AIService
+from app.services.analytics_context_service import AnalyticsContextService
 from app.services.analytics_service import AnalyticsService
+from app.services.auth_service import AuthService, AuthenticatedUser
 from app.services.business_interpretation_service import BusinessInterpretationService
 from app.services.ai_response_service import AIResponseService
 from app.services.chat_service import ChatService
 from app.services.business_assistant_service import BusinessAssistantService
 from app.services.document_loader_service import DocumentLoaderService
+from app.services.financial_analytics_service import FinancialAnalyticsService
 from app.services.natural_chat_service import NaturalChatService
 from app.services.rag_service import RAGService
 from app.services.semantic_search_service import SemanticSearchService
+from app.domain.auth import UserRole
 
 DbSession = Annotated[Session, Depends(get_db)]
 DynamicsClientDep = Annotated[DynamicsODataClient, Depends(create_dynamics_client)]
@@ -58,15 +64,34 @@ def get_semantic_search_service() -> SemanticSearchService:
     vector_store = create_vector_store(embeddings)
     return SemanticSearchService(vector_store=vector_store, documents_dir=Path(settings.DOCUMENTS_DIR))
 
+def get_financial_analytics_repository(db: DbSession) -> FinancialAnalyticsRepository:
+    return FinancialAnalyticsRepository(db)
+
+def get_financial_analytics_service(
+    repository: FinancialAnalyticsRepository=Depends(get_financial_analytics_repository),
+) -> FinancialAnalyticsService:
+    return FinancialAnalyticsService(repository)
+
+def get_analytics_context_service(
+    analytics_service: AnalyticsService=Depends(get_analytics_service),
+    financial_analytics_service: FinancialAnalyticsService=Depends(get_financial_analytics_service),
+) -> AnalyticsContextService:
+    return AnalyticsContextService(
+        analytics_service=analytics_service,
+        financial_analytics_service=financial_analytics_service,
+    )
+
 def get_business_assistant_service(
     chat_service: ChatService=Depends(get_chat_service),
     semantic_search_service: SemanticSearchService=Depends(get_semantic_search_service),
     ai_response_service: AIResponseService=Depends(get_ai_response_service),
+    analytics_context_service: AnalyticsContextService=Depends(get_analytics_context_service),
 ) -> BusinessAssistantService:
     return BusinessAssistantService(
         chat_service=chat_service,
         semantic_search_service=semantic_search_service,
         ai_response_service=ai_response_service,
+        analytics_context_service=analytics_context_service,
     )
 
 def get_rag_service(llm_client: OllamaClientDep) -> RAGService:
@@ -76,3 +101,23 @@ def get_rag_service(llm_client: OllamaClientDep) -> RAGService:
 
 def get_db_session() -> Generator[Session, None, None]:
     yield from get_db()
+
+def get_user_repository(db: DbSession) -> UserRepository:
+    return UserRepository(db)
+
+def get_auth_service(repository: UserRepository=Depends(get_user_repository)) -> AuthService:
+    return AuthService(repository)
+
+def get_current_user(request: Request, db: DbSession) -> AuthenticatedUser:
+    if not settings.AUTH_ENABLED:
+        return AuthenticatedUser(id=0, username='test', role=UserRole.ADMIN)
+    user_id = request.session.get('user_id')
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='No autenticado')
+    auth_service = AuthService(UserRepository(db))
+    user = auth_service.get_user_by_id(int(user_id))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='No autenticado')
+    return user
+
+CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]

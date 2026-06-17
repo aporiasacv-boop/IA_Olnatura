@@ -27,8 +27,11 @@ class Settings(BaseSettings):
     D365_CLIENTES_ENTITY: str = 'CustomersV3'
     D365_VENTAS_ENTITY: str = 'SalesOrderHeadersV2'
     D365_VENTAS_ENTITY_LABEL: str = 'D365SalesOrderHeaders'
+    D365_VENTAS_LINEAS_ENTITY: str = 'D365SalesOrderLines'
+    D365_VENTAS_LINEAS_ENTITY_LABEL: str = 'D365SalesOrderLines'
     SYNC_CLIENTES_MAX_RECORDS: int = 100
     SYNC_VENTAS_MAX_RECORDS: int = 100
+    SYNC_VENTAS_LINEAS_MAX_RECORDS: int = 100
     ETL_PAGE_SIZE: int = 100
     ETL_MAX_RETRIES: int = 3
     ETL_RETRY_BASE_DELAY: float = 1.0
@@ -42,6 +45,13 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
     RAG_TOP_K: int = 4
     DOCUMENTS_DIR: str = './data/documents'
+    AUTH_ENABLED: bool = True
+    SESSION_SECRET_KEY: str = 'cambiar-esta-clave-en-produccion'
+    SESSION_MAX_AGE: int = 86400
+    DEFAULT_ADMIN_USERNAME: str = 'admin'
+    DEFAULT_ADMIN_PASSWORD: str = 'Admin123!'
+    DEFAULT_MANAGER_PASSWORD: str = 'Manager123!'
+    DEFAULT_USER_PASSWORD: str = 'User123!'
 
     @property
     def d365_token_url(self) -> str:

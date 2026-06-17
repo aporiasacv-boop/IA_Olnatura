@@ -33,3 +33,9 @@ class AnalyticsService:
 
     def top_customers(self, limit: int=10) -> list[TopCustomer]:
         return self._repository.top_customers(limit)
+
+    def sales_date_range(self) -> tuple[date | None, date | None]:
+        return self._repository.sales_date_range()
+
+    def ventas_por_cliente(self) -> list[ClienteVentas]:
+        return self._repository.ventas_por_cliente()

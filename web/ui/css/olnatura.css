@@ -150,3 +150,16 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.login-page {
+  background: linear-gradient(180deg, #f8faf9 0%, #e9f5ee 100%);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.login-page .olnatura-logo {
+  background: var(--olnatura-primary);
+}

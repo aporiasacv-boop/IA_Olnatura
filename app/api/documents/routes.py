@@ -32,8 +32,12 @@ def reload_documents(service: DocumentLoaderService=Depends(get_document_loader_
     return DocumentsReloadResponse(documents=documents)
 
 @router.post('/index', response_model=DocumentIndexResponse, summary='Indexar documentos de data/documents en ChromaDB', tags=['Documents'])
-def index_documents(service: SemanticSearchService=Depends(get_semantic_search_service)) -> DocumentIndexResponse:
+def index_documents(
+    service: SemanticSearchService=Depends(get_semantic_search_service),
+    loader: DocumentLoaderService=Depends(get_document_loader_service),
+) -> DocumentIndexResponse:
     logger.info('Indexacion semantica solicitada via POST /documents/index')
+    loader.reload()
     try:
         result = service.index_all()
     except DocumentLoaderError as exc:

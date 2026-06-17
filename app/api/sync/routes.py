@@ -20,3 +20,9 @@ def run_sync_ventas(service: SyncService=Depends(get_sync_service)) -> MvpSyncRe
     logger.info('Sincronización de ventas solicitada vía POST /sync/ventas')
     result = service.run_ventas()
     return MvpSyncResponse(entity=result.entity, read=result.read, inserted=result.inserted, updated=result.updated, errors=result.errors)
+
+@router.post('/sync/ventas-lineas', response_model=MvpSyncResponse, summary='Sincronizar lineas de venta Dynamics → PostgreSQL', tags=['Sync'])
+def run_sync_ventas_lineas(service: SyncService=Depends(get_sync_service)) -> MvpSyncResponse:
+    logger.info('Sincronizacion de lineas de venta solicitada via POST /sync/ventas-lineas')
+    result = service.run_ventas_lineas()
+    return MvpSyncResponse(entity=result.entity, read=result.read, inserted=result.inserted, updated=result.updated, errors=result.errors)

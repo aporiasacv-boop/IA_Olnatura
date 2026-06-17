@@ -10,6 +10,7 @@ def test_index_all_indexes_new_documents(tmp_path: Path) -> None:
     chroma_dir = tmp_path / 'chroma'
     vector_store = MagicMock()
     vector_store.add_documents.return_value = 1
+    vector_store.count_chunks.return_value = 0
     service = SemanticSearchService(vector_store=vector_store, documents_dir=docs_dir, app_settings=type('Settings', (), {'CHROMA_PERSIST_DIR': str(chroma_dir), 'RAG_CHUNK_SIZE': 50, 'RAG_CHUNK_OVERLAP': 10, 'RAG_TOP_K': 4})())
     result = service.index_all()
     assert result.documents == 1
@@ -26,6 +27,7 @@ def test_index_all_skips_duplicate_documents(tmp_path: Path) -> None:
     chroma_dir = tmp_path / 'chroma'
     vector_store = MagicMock()
     vector_store.add_documents.return_value = 1
+    vector_store.count_chunks.return_value = 1
     settings = type('Settings', (), {'CHROMA_PERSIST_DIR': str(chroma_dir), 'RAG_CHUNK_SIZE': 100, 'RAG_CHUNK_OVERLAP': 20, 'RAG_TOP_K': 4})()
     service = SemanticSearchService(vector_store=vector_store, documents_dir=docs_dir, app_settings=settings)
     first = service.index_all()
@@ -43,9 +45,11 @@ def test_index_all_reindexes_when_file_changes(tmp_path: Path) -> None:
     chroma_dir = tmp_path / 'chroma'
     vector_store = MagicMock()
     vector_store.add_documents.return_value = 1
+    vector_store.count_chunks.return_value = 0
     settings = type('Settings', (), {'CHROMA_PERSIST_DIR': str(chroma_dir), 'RAG_CHUNK_SIZE': 100, 'RAG_CHUNK_OVERLAP': 20, 'RAG_TOP_K': 4})()
     service = SemanticSearchService(vector_store=vector_store, documents_dir=docs_dir, app_settings=settings)
     service.index_all()
+    vector_store.count_chunks.return_value = 1
     file_path.write_text('Version dos actualizada.', encoding='utf-8')
     result = service.index_all()
     assert result.chunks == 1
@@ -65,6 +69,24 @@ def test_search_returns_ranked_results() -> None:
     assert result.results[0].score == 0.93
     vector_store.similarity_search_with_score.assert_called_once_with('objeto social de la empresa', k=3)
 
+def test_index_all_reindexes_when_manifest_exists_but_collection_empty(tmp_path: Path) -> None:
+    docs_dir = tmp_path / 'documents'
+    docs_dir.mkdir()
+    (docs_dir / 'manual.txt').write_text('Objeto social y procesos corporativos.', encoding='utf-8')
+    chroma_dir = tmp_path / 'chroma'
+    manifest_path = chroma_dir / 'index_manifest.json'
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text('{"manual.txt": "stale-hash"}', encoding='utf-8')
+    vector_store = MagicMock()
+    vector_store.add_documents.return_value = 1
+    vector_store.count_chunks.return_value = 0
+    settings = type('Settings', (), {'CHROMA_PERSIST_DIR': str(chroma_dir), 'RAG_CHUNK_SIZE': 100, 'RAG_CHUNK_OVERLAP': 20, 'RAG_TOP_K': 4})()
+    service = SemanticSearchService(vector_store=vector_store, documents_dir=docs_dir, app_settings=settings)
+    result = service.index_all()
+    assert result.documents == 1
+    assert result.chunks == 1
+    vector_store.add_documents.assert_called_once()
+
 def test_index_all_removes_deleted_documents_from_manifest(tmp_path: Path) -> None:
     docs_dir = tmp_path / 'documents'
     docs_dir.mkdir()
@@ -75,9 +97,11 @@ def test_index_all_removes_deleted_documents_from_manifest(tmp_path: Path) -> No
     chroma_dir = tmp_path / 'chroma'
     vector_store = MagicMock()
     vector_store.add_documents.return_value = 1
+    vector_store.count_chunks.return_value = 1
     settings = type('Settings', (), {'CHROMA_PERSIST_DIR': str(chroma_dir), 'RAG_CHUNK_SIZE': 100, 'RAG_CHUNK_OVERLAP': 20, 'RAG_TOP_K': 4})()
     service = SemanticSearchService(vector_store=vector_store, documents_dir=docs_dir, app_settings=settings)
     service.index_all()
+    vector_store.count_chunks.return_value = 1
     removed.unlink()
     result = service.index_all()
     assert result.documents == 1
