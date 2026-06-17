@@ -24,6 +24,8 @@ from app.services.chat_service import ChatService
 from app.services.business_assistant_service import BusinessAssistantService
 from app.services.document_context_service import DocumentContextService
 from app.services.document_insights_service import DocumentInsightsService
+from app.services.copilot_context_service import CopilotContextService
+from app.services.copilot_insights_service import CopilotInsightsService
 from app.services.document_loader_service import DocumentLoaderService
 from app.services.hybrid_context_service import HybridContextService
 from app.services.hybrid_insights_service import HybridInsightsService
@@ -107,6 +109,20 @@ def get_hybrid_context_service(
 def get_hybrid_insights_service() -> HybridInsightsService:
     return HybridInsightsService()
 
+def get_copilot_insights_service() -> CopilotInsightsService:
+    return CopilotInsightsService()
+
+def get_copilot_context_service(
+    hybrid_context_service: HybridContextService=Depends(get_hybrid_context_service),
+    hybrid_insights_service: HybridInsightsService=Depends(get_hybrid_insights_service),
+    copilot_insights_service: CopilotInsightsService=Depends(get_copilot_insights_service),
+) -> CopilotContextService:
+    return CopilotContextService(
+        hybrid_context_service,
+        hybrid_insights_service,
+        copilot_insights_service,
+    )
+
 def get_business_assistant_service(
     chat_service: ChatService=Depends(get_chat_service),
     semantic_search_service: SemanticSearchService=Depends(get_semantic_search_service),
@@ -116,6 +132,7 @@ def get_business_assistant_service(
     document_insights_service: DocumentInsightsService=Depends(get_document_insights_service),
     hybrid_context_service: HybridContextService=Depends(get_hybrid_context_service),
     hybrid_insights_service: HybridInsightsService=Depends(get_hybrid_insights_service),
+    copilot_context_service: CopilotContextService=Depends(get_copilot_context_service),
 ) -> BusinessAssistantService:
     return BusinessAssistantService(
         chat_service=chat_service,
@@ -126,6 +143,7 @@ def get_business_assistant_service(
         document_insights_service=document_insights_service,
         hybrid_context_service=hybrid_context_service,
         hybrid_insights_service=hybrid_insights_service,
+        copilot_context_service=copilot_context_service,
     )
 
 def get_rag_service(llm_client: OllamaClientDep) -> RAGService:

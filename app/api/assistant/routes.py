@@ -3,7 +3,14 @@ from app.api.deps import get_business_assistant_service
 from app.core.logging import get_logger
 from app.integrations.ollama.exceptions import OllamaError
 from app.rag.exceptions import RAGError
-from app.schemas.assistant import AssistantRequest, AssistantResponse, HybridAnalysisRequest, HybridAnalysisResponse
+from app.schemas.assistant import (
+    AssistantRequest,
+    AssistantResponse,
+    CopilotRequest,
+    CopilotResponse,
+    HybridAnalysisRequest,
+    HybridAnalysisResponse,
+)
 from app.services.business_assistant_service import BusinessAssistantService
 
 router = APIRouter()
@@ -36,5 +43,21 @@ def analyze_hybrid(request: HybridAnalysisRequest, service: BusinessAssistantSer
     return HybridAnalysisResponse(
         confidence=result.confidence,
         sources=result.sources,
+        answer=result.answer,
+    )
+
+@router.post('/copilot', response_model=CopilotResponse, summary='Business Copilot empresarial', tags=['Assistant'])
+def ask_copilot(request: CopilotRequest, service: BusinessAssistantService=Depends(get_business_assistant_service)) -> CopilotResponse:
+    logger.info('Pregunta recibida en POST /assistant/copilot')
+    try:
+        result = service.ask_copilot(request.question)
+    except OllamaError as exc:
+        logger.error('Error Ollama en Business Copilot: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.message) from exc
+    except RAGError as exc:
+        logger.error('Error en Business Copilot: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
+    return CopilotResponse(
+        attention_points=result.attention_points,
         answer=result.answer,
     )

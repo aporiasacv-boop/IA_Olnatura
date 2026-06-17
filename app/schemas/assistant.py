@@ -14,3 +14,10 @@ class HybridAnalysisResponse(BaseModel):
     confidence: str = Field(..., description='Nivel de confianza hibrida: HIGH, MEDIUM o LOW')
     sources: list[str] = Field(default_factory=list, description='Documentos y fuentes relacionadas')
     answer: str = Field(..., description='Respuesta integrada empresarial')
+
+class CopilotRequest(BaseModel):
+    question: str = Field(..., min_length=1, description='Pregunta para el Business Copilot', examples=['¿Qué debería revisar?'])
+
+class CopilotResponse(BaseModel):
+    attention_points: list[str] = Field(default_factory=list, description='Puntos de atencion identificados')
+    answer: str = Field(..., description='Respuesta del Business Copilot')

@@ -72,6 +72,17 @@ def test_is_advanced_hybrid_detects_complex_questions(question: str) -> None:
     assert classifier.is_hybrid(question) is True
 
 @pytest.mark.parametrize('question', [
+    '¿Qué debería revisar?',
+    '¿Qué me recomiendas analizar?',
+    '¿Dónde debería poner atención?',
+    '¿Qué riesgos debería monitorear?',
+    '¿Qué temas requieren seguimiento?',
+])
+def test_is_copilot_question_detects_copilot_prompts(question: str) -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_copilot_question(question) is True
+
+@pytest.mark.parametrize('question', [
     '¿Cómo está distribuida nuestra cartera?',
     '¿Qué observas en las ventas?',
     'Dame un resumen ejecutivo de ventas',

@@ -53,6 +53,19 @@ def test_generate_from_documents_builds_document_prompt() -> None:
     prompt = llm.generate.call_args.args[0]
     assert 'FRAGMENTOS DOCUMENTALES' in prompt
 
+def test_generate_copilot_response_builds_copilot_prompt() -> None:
+    llm = MagicMock()
+    llm.generate.return_value = 'Seria conveniente monitorear la concentracion comercial.'
+    service = AIResponseService(llm)
+    answer = service.generate_copilot_response(
+        question='¿Qué debería revisar?',
+        copilot_context={'copilot_insights': {'recommended_reviews': ['Revisar clientes']}},
+    )
+    assert 'concentracion' in answer
+    prompt = llm.generate.call_args.args[0]
+    assert 'Business Copilot' in prompt
+    assert 'copilot_insights' in prompt
+
 def test_generate_hybrid_business_analysis_builds_expert_prompt() -> None:
     llm = MagicMock()
     llm.generate.return_value = 'Hay 100 clientes y se registran segun Manual_Clientes.pdf.'

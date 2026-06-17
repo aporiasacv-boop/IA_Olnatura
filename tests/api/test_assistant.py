@@ -99,3 +99,22 @@ def test_post_assistant_hybrid_analysis_endpoint() -> None:
     assert data['sources'] == ['Manual_Clientes.pdf']
     assert '100 clientes' in data['answer']
     mock_service.analyze_hybrid.assert_called_once_with('¿Cuántos clientes tenemos y cómo se registran?')
+
+def test_post_assistant_copilot_endpoint() -> None:
+    from app.services.business_assistant_service import CopilotResult
+    mock_service = MagicMock(spec=BusinessAssistantService)
+    mock_service.ask_copilot.return_value = CopilotResult(
+        attention_points=['Dependencia de principales clientes', 'Dependencia del producto principal'],
+        answer='Se observa concentracion comercial moderada en Farmacias de Similares.',
+    )
+    app.dependency_overrides[get_business_assistant_service] = lambda: mock_service
+    try:
+        with TestClient(app) as client:
+            response = client.post('/assistant/copilot', json={'question': '¿Qué debería revisar?'})
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data['attention_points']) == 2
+    assert 'concentracion' in data['answer'].lower()
+    mock_service.ask_copilot.assert_called_once_with('¿Qué debería revisar?')

@@ -80,6 +80,18 @@ class QuestionClassifier:
         'ingresos y documentacion',
     )
 
+    _COPILOT_PHRASES = (
+        'que deberia revisar',
+        'que me recomiendas analizar',
+        'donde deberia poner atencion',
+        'que riesgos deberia monitorear',
+        'que temas requieren seguimiento',
+        'que debo revisar',
+        'que debo monitorear',
+        'que merece atencion',
+        'que areas requieren atencion',
+    )
+
     _ANALYTICS_INTENTS = frozenset({
         ChatIntent.CUSTOMERS_COUNT,
         ChatIntent.SALES_COUNT,
@@ -109,6 +121,18 @@ class QuestionClassifier:
         if 'cuantos pedidos' in normalized or 'numero de pedidos' in normalized or 'total de pedidos' in normalized:
             return ChatIntent.SALES_COUNT
         return ChatIntent.UNKNOWN
+
+    def is_copilot_question(self, question: str) -> bool:
+        normalized = self._normalize(question)
+        if any(phrase in normalized for phrase in self._COPILOT_PHRASES):
+            return True
+        if 'recomiendas' in normalized and 'analizar' in normalized:
+            return True
+        if 'deberia' in normalized and any(token in normalized for token in ('revisar', 'monitorear', 'atencion')):
+            return True
+        if 'requieren seguimiento' in normalized or 'requiere seguimiento' in normalized:
+            return True
+        return False
 
     def is_executive_question(self, question: str) -> bool:
         normalized = self._normalize(question)

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from app.services.ai_response_service import AIResponseService
 from app.services.analytics_context_service import AnalyticsContextService
 from app.services.chat_service import ChatService
+from app.services.copilot_context_service import CopilotContextService
 from app.services.document_context_service import DocumentContextService
 from app.services.document_insights_service import DocumentInsightsService
 from app.services.hybrid_context_service import HybridContextService
@@ -24,6 +25,11 @@ class HybridAnalysisResult:
     sources: list[str]
     answer: str
 
+@dataclass(frozen=True)
+class CopilotResult:
+    attention_points: list[str]
+    answer: str
+
 class BusinessAssistantService:
 
     def __init__(
@@ -36,6 +42,7 @@ class BusinessAssistantService:
         document_insights_service: DocumentInsightsService | None = None,
         hybrid_context_service: HybridContextService | None = None,
         hybrid_insights_service: HybridInsightsService | None = None,
+        copilot_context_service: CopilotContextService | None = None,
         classifier: QuestionClassifier | None = None,
         logger: logging.Logger | None = None,
     ):
@@ -51,20 +58,31 @@ class BusinessAssistantService:
             self._document_insights_service,
         )
         self._hybrid_insights_service = hybrid_insights_service or HybridInsightsService()
+        self._copilot_context_service = copilot_context_service
         self._classifier = classifier or QuestionClassifier()
         self._logger = logger or logging.getLogger(__name__)
 
     def ask(self, question: str) -> AssistantResult:
         started_at = time.perf_counter()
-        chat_result = self._chat_service.process(question)
+        self._chat_service.process(question)
         executive_mode = False
         document_mode = False
         hybrid_mode = False
+        copilot_mode = False
         if self._classifier.is_hybrid(question):
             route_selected = 'hybrid'
             response_source = 'hybrid'
             hybrid_mode = True
             answer, analytics_hits, document_hits, hybrid_insights = self._answer_hybrid(question)
+            copilot_insights = None
+        elif self._classifier.is_copilot_question(question):
+            route_selected = 'copilot'
+            response_source = 'copilot'
+            copilot_mode = True
+            analytics_hits = 1
+            document_hits = 0
+            answer, copilot_insights = self._answer_copilot(question)
+            hybrid_insights = None
         elif self._classifier.is_executive_question(question):
             route_selected = 'executive'
             response_source = 'executive'
@@ -74,6 +92,7 @@ class BusinessAssistantService:
             answer, executive_insights = self._answer_executive(question)
             document_insights = None
             hybrid_insights = None
+            copilot_insights = None
         elif self._classifier.is_analytics_question(question):
             route_selected = 'analytics'
             response_source = 'analytics'
@@ -83,6 +102,7 @@ class BusinessAssistantService:
             executive_insights = None
             document_insights = None
             hybrid_insights = None
+            copilot_insights = None
         else:
             route_selected = 'documents'
             response_source = 'documents'
@@ -91,6 +111,7 @@ class BusinessAssistantService:
             answer, document_hits, document_insights = self._answer_from_documents(question)
             executive_insights = None
             hybrid_insights = None
+            copilot_insights = None
         execution_time_ms = (time.perf_counter() - started_at) * 1000
         if hybrid_mode and hybrid_insights is not None:
             self._logger.info(
@@ -103,6 +124,18 @@ class BusinessAssistantService:
                 bool(hybrid_insights.get('executive_used')),
                 len(hybrid_insights.get('cross_source_findings', [])),
                 hybrid_insights.get('confidence'),
+                analytics_hits,
+                document_hits,
+                execution_time_ms,
+            )
+        elif copilot_mode and copilot_insights is not None:
+            self._logger.info(
+                'route_selected=%s response_source=%s copilot_mode=%s attention_points_count=%s recommended_reviews_count=%s analytics_hits=%s document_hits=%s execution_time_ms=%.2f',
+                route_selected,
+                response_source,
+                True,
+                len(copilot_insights.get('attention_points', [])),
+                len(copilot_insights.get('recommended_reviews', [])),
                 analytics_hits,
                 document_hits,
                 execution_time_ms,
@@ -170,6 +203,42 @@ class BusinessAssistantService:
             sources=hybrid_insights.related_documents,
             answer=answer.strip(),
         )
+
+    def ask_copilot(self, question: str) -> CopilotResult:
+        copilot_context = self._get_copilot_context_service().build_context(question)
+        copilot_insights = copilot_context.copilot_insights
+        answer = self._ai_response_service.generate_copilot_response(
+            question=question,
+            copilot_context=copilot_context.to_dict(),
+        )
+        self._logger.info(
+            'copilot_mode=%s attention_points_count=%s recommended_reviews_count=%s',
+            True,
+            len(copilot_insights.get('attention_points', [])),
+            len(copilot_insights.get('recommended_reviews', [])),
+        )
+        return CopilotResult(
+            attention_points=list(copilot_insights.get('attention_points', [])),
+            answer=answer.strip(),
+        )
+
+    def _get_copilot_context_service(self) -> CopilotContextService:
+        if self._copilot_context_service is None:
+            from app.services.copilot_insights_service import CopilotInsightsService
+            self._copilot_context_service = CopilotContextService(
+                self._hybrid_context_service,
+                self._hybrid_insights_service,
+                CopilotInsightsService(),
+            )
+        return self._copilot_context_service
+
+    def _answer_copilot(self, question: str) -> tuple[str, dict[str, object]]:
+        copilot_context = self._get_copilot_context_service().build_context(question)
+        answer = self._ai_response_service.generate_copilot_response(
+            question=question,
+            copilot_context=copilot_context.to_dict(),
+        )
+        return answer.strip(), copilot_context.copilot_insights
 
     def _answer_analytics(self, question: str) -> str:
         snapshot = self._analytics_context_service.build_snapshot().to_dict()

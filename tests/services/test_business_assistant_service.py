@@ -525,3 +525,67 @@ def test_ask_hybrid_with_no_document_results_still_uses_hybrid_path() -> None:
     assert call_kwargs['hybrid_context']['document_context']['total_matches'] == 0
 
 
+
+def test_ask_routes_copilot_question() -> None:
+
+    question = '¿Qué debería revisar?'
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(question=question, intent=ChatIntent.UNKNOWN, data=None)
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    semantic_search.search.return_value = SemanticSearchResult(query=question, results=[])
+
+    semantic_search.get_metadata_entries.return_value = {}
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_copilot_response.return_value = 'Seria conveniente monitorear la concentracion comercial.'
+
+    classifier = QuestionClassifier()
+
+    service = _build_service(chat_service, semantic_search, ai_response, classifier=classifier)
+
+    result = service.ask(question)
+
+    assert result.source == 'copilot'
+
+    ai_response.generate_copilot_response.assert_called_once()
+
+
+
+def test_ask_copilot_logs_copilot_mode() -> None:
+
+    question = '¿Qué riesgos debería monitorear?'
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(question=question, intent=ChatIntent.UNKNOWN, data=None)
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    semantic_search.search.return_value = SemanticSearchResult(query=question, results=[])
+
+    semantic_search.get_metadata_entries.return_value = {}
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_copilot_response.return_value = 'El principal riesgo observado es la concentracion de ingresos.'
+
+    logger = MagicMock()
+
+    classifier = QuestionClassifier()
+
+    service = _build_service(chat_service, semantic_search, ai_response, classifier=classifier)
+
+    service._logger = logger
+
+    service.ask(question)
+
+    assert logger.info.call_args.args[1] == 'copilot'
+
+    assert logger.info.call_args.args[3] is True
+
+
