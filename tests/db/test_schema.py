@@ -10,6 +10,7 @@ def test_ensure_database_schema_creates_ventas_table() -> None:
     assert 'venta_lineas' in table_names
     assert 'clientes' in table_names
     assert 'users' in table_names
+    assert 'organizational_snapshots' in table_names
     with engine.connect() as connection:
         result = connection.execute(text('SELECT COUNT(*) FROM ventas')).scalar()
     assert result == 0

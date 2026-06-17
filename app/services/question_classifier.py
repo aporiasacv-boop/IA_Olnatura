@@ -92,6 +92,17 @@ class QuestionClassifier:
         'que areas requieren atencion',
     )
 
+    _MEMORY_PHRASES = (
+        'que ha cambiado',
+        'que diferencias observas',
+        'hay cambios respecto al analisis anterior',
+        'que hallazgos siguen presentes',
+        'cambios respecto al snapshot anterior',
+        'comparado con el analisis anterior',
+        'respecto al analisis anterior',
+        'respecto al snapshot anterior',
+    )
+
     _ANALYTICS_INTENTS = frozenset({
         ChatIntent.CUSTOMERS_COUNT,
         ChatIntent.SALES_COUNT,
@@ -121,6 +132,18 @@ class QuestionClassifier:
         if 'cuantos pedidos' in normalized or 'numero de pedidos' in normalized or 'total de pedidos' in normalized:
             return ChatIntent.SALES_COUNT
         return ChatIntent.UNKNOWN
+
+    def is_memory_question(self, question: str) -> bool:
+        normalized = self._normalize(question)
+        if any(phrase in normalized for phrase in self._MEMORY_PHRASES):
+            return True
+        if 'cambios' in normalized and any(token in normalized for token in ('anterior', 'snapshot', 'analisis')):
+            return True
+        if 'hallazgos' in normalized and any(token in normalized for token in ('siguen', 'presentes', 'persisten', 'continuan')):
+            return True
+        if 'diferencias' in normalized and 'observas' in normalized:
+            return True
+        return False
 
     def is_copilot_question(self, question: str) -> bool:
         normalized = self._normalize(question)

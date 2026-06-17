@@ -25,6 +25,7 @@ from app.api.auth.routes import router as auth_router
 from app.api.chat.routes import router as chat_router
 
 from app.api.documents.routes import router as documents_router
+from app.api.memory.routes import router as memory_router
 
 from app.core.config import settings
 
@@ -98,6 +99,8 @@ def create_app() -> FastAPI:
     application.include_router(assistant_router, prefix='/assistant')
 
     application.include_router(documents_router, prefix='/documents')
+
+    application.include_router(memory_router, prefix='/memory')
 
     if UI_DIR.is_dir():
 

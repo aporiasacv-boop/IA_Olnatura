@@ -1,0 +1,95 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.4.2, pluggy-1.6.0
+rootdir: C:\Users\BecarioQR\OneDrive - OLNATURA, S.A. DE CV\Escritorio\IA_Olnatura
+configfile: pytest.ini
+plugins: anyio-4.13.0, langsmith-0.8.16, asyncio-0.26.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 300 items
+
+tests\api\test_ai.py ...                                                 [  1%]
+tests\api\test_analytics.py .........                                    [  4%]
+tests\api\test_assistant.py .......                                      [  6%]
+tests\api\test_auth.py .........                                         [  9%]
+tests\api\test_business_summary.py ...                                   [ 10%]
+tests\api\test_chat.py ........                                          [ 13%]
+tests\api\test_chat_natural.py ....                                      [ 14%]
+tests\api\test_db_health.py ..                                           [ 15%]
+tests\api\test_document_loader.py .......                                [ 17%]
+tests\api\test_documents.py .....                                        [ 19%]
+tests\api\test_dynamics_health.py ..                                     [ 19%]
+tests\api\test_health.py .                                               [ 20%]
+tests\api\test_memory.py ....                                            [ 21%]
+tests\api\test_root.py .                                                 [ 21%]
+tests\core\test_config.py ....                                           [ 23%]
+tests\core\test_logging.py ..                                            [ 23%]
+tests\db\test_schema.py .                                                [ 24%]
+tests\db\test_session.py ..                                              [ 24%]
+tests\etl\test_retry.py ...                                              [ 25%]
+tests\etl\test_transformers.py ..                                        [ 26%]
+tests\etl\test_venta_linea_transformer.py ...                            [ 27%]
+tests\integration\test_semantic_search.py ..                             [ 28%]
+tests\integration\test_sync_endpoint.py .                                [ 28%]
+tests\integration\test_sync_service.py ...                               [ 29%]
+tests\integration\test_sync_ventas_endpoint.py .                         [ 29%]
+tests\integration\test_sync_ventas_lineas_endpoint.py .                  [ 30%]
+tests\integration\test_sync_ventas_lineas_service.py ..                  [ 30%]
+tests\integration\test_sync_ventas_service.py ...                        [ 31%]
+tests\integrations\dynamics\test_oauth.py ....                           [ 33%]
+tests\integrations\dynamics\test_odata_client.py .....                   [ 34%]
+tests\integrations\dynamics\test_odata_pagination.py .                   [ 35%]
+tests\integrations\ollama\test_client.py ....                            [ 36%]
+tests\middleware\test_auth_middleware.py .                               [ 36%]
+tests\models\test_organizational_snapshot.py .                           [ 37%]
+tests\rag\test_chunking.py .                                             [ 37%]
+tests\rag\test_index_manifest.py ...                                     [ 38%]
+tests\rag\test_loaders.py ...                                            [ 39%]
+tests\rag\test_prompts.py .                                              [ 39%]
+tests\repositories\test_analytics_repository.py ...........              [ 43%]
+tests\repositories\test_financial_analytics_repository.py ...            [ 44%]
+tests\repositories\test_venta_linea_repository.py .                      [ 44%]
+tests\services\prompts\test_ai_response.py ...                           [ 45%]
+tests\services\prompts\test_business_analyst.py .                        [ 46%]
+tests\services\prompts\test_business_copilot.py .                        [ 46%]
+tests\services\prompts\test_business_summary.py ..                       [ 47%]
+tests\services\prompts\test_document_expert.py .                         [ 47%]
+tests\services\prompts\test_document_response.py ..                      [ 48%]
+tests\services\prompts\test_executive_summary.py .                       [ 48%]
+tests\services\prompts\test_hybrid_business_expert.py .                  [ 48%]
+tests\services\prompts\test_hybrid_response.py ..                        [ 49%]
+tests\services\prompts\test_organizational_memory.py .                   [ 49%]
+tests\services\test_ai_response_service.py ......F..                     [ 52%]
+tests\services\test_ai_service.py .                                      [ 53%]
+tests\services\test_analytics_context_service.py ...                     [ 54%]
+tests\services\test_analytics_service.py ........                        [ 56%]
+tests\services\test_auth_service.py ...                                  [ 57%]
+tests\services\test_business_assistant_service.py ..............         [ 62%]
+tests\services\test_business_interpretation_service.py ..                [ 63%]
+tests\services\test_chat_service.py .......                              [ 65%]
+tests\services\test_context_fusion_service.py ..                         [ 66%]
+tests\services\test_copilot_insights_service.py ......                   [ 68%]
+tests\services\test_db_health.py ..                                      [ 68%]
+tests\services\test_document_context_service.py ..                       [ 69%]
+tests\services\test_document_insights_service.py ....                    [ 70%]
+tests\services\test_document_loader_service.py ........                  [ 73%]
+tests\services\test_dynamics_health.py ..                                [ 74%]
+tests\services\test_executive_insights_service.py .......                [ 76%]
+tests\services\test_hybrid_context_service.py .                          [ 76%]
+tests\services\test_hybrid_insights_service.py ....                      [ 78%]
+tests\services\test_memory_insights_service.py ...                       [ 79%]
+tests\services\test_natural_chat_service.py ...                          [ 80%]
+tests\services\test_password_service.py .                                [ 80%]
+tests\services\test_question_classifier.py ............................. [ 90%]
+..................                                                       [ 96%]
+tests\services\test_rag_service.py ...                                   [ 97%]
+tests\services\test_semantic_search_service.py ......                    [ 99%]
+tests\services\test_snapshot_memory_service.py ...                       [100%]
+
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\BecarioQR\OneDrive - OLNATURA, S.A. DE CV\Escritorio\IA_Olnatura\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/services/test_ai_response_service.py::test_generate_hybrid_builds_fused_prompt
+================== 1 failed, 299 passed, 1 warning in 33.05s ==================

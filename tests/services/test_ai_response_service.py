@@ -114,3 +114,20 @@ def test_generate_business_analysis_builds_analyst_prompt() -> None:
     assert 'analista empresarial senior' in prompt
     assert 'SNAPSHOT EMPRESARIAL' in prompt
     assert 'largest_customer_share' in prompt
+
+def test_generate_memory_analysis_builds_historian_prompt() -> None:
+    llm = MagicMock()
+    llm.generate.return_value = 'Respecto al snapshot anterior, el numero de clientes permanece estable.'
+    service = AIResponseService(llm)
+    answer = service.generate_memory_analysis(
+        question='¿Qué ha cambiado?',
+        memory_context={
+            'latest_snapshot': {'total_customers': 100},
+            'previous_snapshot': {'total_customers': 100},
+            'memory_insights': {'changes': [], 'stable_findings': ['Estable'], 'new_findings': []},
+        },
+    )
+    assert 'permanece estable' in answer
+    prompt = llm.generate.call_args.args[0]
+    assert 'historiador empresarial' in prompt
+    assert 'memory_insights' in prompt

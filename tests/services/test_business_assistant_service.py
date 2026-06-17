@@ -17,6 +17,8 @@ from app.services.question_classifier import QuestionClassifier
 
 from app.services.semantic_search_service import SemanticSearchHit, SemanticSearchResult, SemanticSearchService
 
+from app.services.snapshot_memory_service import SnapshotMemoryService
+
 
 
 _SNAPSHOT = AnalyticsContextSnapshot(
@@ -92,11 +94,15 @@ def _build_service(
 
     classifier: QuestionClassifier | None = None,
 
+    snapshot_memory: MagicMock | None = None,
+
 ) -> BusinessAssistantService:
 
     analytics_context = analytics_context or MagicMock(spec=AnalyticsContextService)
 
     analytics_context.build_snapshot.return_value = _SNAPSHOT
+
+    snapshot_memory = snapshot_memory or MagicMock(spec=SnapshotMemoryService)
 
     return BusinessAssistantService(
 
@@ -109,6 +115,8 @@ def _build_service(
         analytics_context_service=analytics_context,
 
         classifier=classifier or QuestionClassifier(),
+
+        snapshot_memory_service=snapshot_memory,
 
     )
 
@@ -587,5 +595,107 @@ def test_ask_copilot_logs_copilot_mode() -> None:
     assert logger.info.call_args.args[1] == 'copilot'
 
     assert logger.info.call_args.args[3] is True
+
+
+
+def test_ask_routes_memory_question() -> None:
+
+    question = '¿Qué ha cambiado?'
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(question=question, intent=ChatIntent.UNKNOWN, data=None)
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_memory_analysis.return_value = 'Respecto al snapshot anterior, el numero de clientes permanece estable.'
+
+    snapshot_memory = MagicMock(spec=SnapshotMemoryService)
+
+    snapshot_memory.build_memory_context.return_value = {
+
+        'latest_snapshot': {'total_customers': 100},
+
+        'previous_snapshot': {'total_customers': 100},
+
+        'memory_insights': {
+
+            'changes': [],
+
+            'stable_findings': ['El numero de clientes permanece estable'],
+
+            'new_findings': [],
+
+        },
+
+    }
+
+    classifier = QuestionClassifier()
+
+    service = _build_service(chat_service, semantic_search, ai_response, classifier=classifier, snapshot_memory=snapshot_memory)
+
+    result = service.ask(question)
+
+    assert result.source == 'memory'
+
+    ai_response.generate_memory_analysis.assert_called_once()
+
+    snapshot_memory.build_memory_context.assert_called_once()
+
+
+
+def test_ask_memory_logs_memory_mode() -> None:
+
+    question = '¿Qué hallazgos siguen presentes?'
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(question=question, intent=ChatIntent.UNKNOWN, data=None)
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_memory_analysis.return_value = 'La dependencia comercial moderada continua presente.'
+
+    snapshot_memory = MagicMock(spec=SnapshotMemoryService)
+
+    snapshot_memory.build_memory_context.return_value = {
+
+        'latest_snapshot': {'total_customers': 100},
+
+        'previous_snapshot': {'total_customers': 100},
+
+        'memory_insights': {
+
+            'changes': [],
+
+            'stable_findings': ['Hallazgo persistente: Concentracion comercial moderada'],
+
+            'new_findings': [],
+
+        },
+
+    }
+
+    logger = MagicMock()
+
+    classifier = QuestionClassifier()
+
+    service = _build_service(chat_service, semantic_search, ai_response, classifier=classifier, snapshot_memory=snapshot_memory)
+
+    service._logger = logger
+
+    service.ask(question)
+
+    assert logger.info.call_args.args[1] == 'memory'
+
+    assert logger.info.call_args.args[3] is True
+
+    assert logger.info.call_args.args[4] == 0
+
+    assert logger.info.call_args.args[5] == 1
 
 

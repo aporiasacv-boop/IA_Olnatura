@@ -126,3 +126,18 @@ def test_executive_question_is_also_analytics_question() -> None:
     classifier = QuestionClassifier()
     assert classifier.is_executive_question('Dame un resumen ejecutivo') is True
     assert classifier.is_analytics_question('Dame un resumen ejecutivo') is True
+
+@pytest.mark.parametrize('question', [
+    '¿Qué ha cambiado?',
+    '¿Qué diferencias observas?',
+    '¿Hay cambios respecto al análisis anterior?',
+    '¿Qué hallazgos siguen presentes?',
+])
+def test_is_memory_question_detects_memory_prompts(question: str) -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_memory_question(question) is True
+
+def test_memory_question_is_not_executive_question() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_memory_question('¿Qué ha cambiado?') is True
+    assert classifier.is_executive_question('¿Qué ha cambiado?') is False

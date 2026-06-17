@@ -13,6 +13,7 @@ from app.integrations.ollama.client import OllamaClient
 from app.rag.factory import create_embeddings, create_vector_store
 from app.repositories.analytics_repository import AnalyticsRepository
 from app.repositories.financial_analytics_repository import FinancialAnalyticsRepository
+from app.repositories.organizational_snapshot_repository import OrganizationalSnapshotRepository
 from app.repositories.user_repository import UserRepository
 from app.services.ai_service import AIService
 from app.services.analytics_context_service import AnalyticsContextService
@@ -30,9 +31,11 @@ from app.services.document_loader_service import DocumentLoaderService
 from app.services.hybrid_context_service import HybridContextService
 from app.services.hybrid_insights_service import HybridInsightsService
 from app.services.financial_analytics_service import FinancialAnalyticsService
+from app.services.memory_insights_service import MemoryInsightsService
 from app.services.natural_chat_service import NaturalChatService
 from app.services.rag_service import RAGService
 from app.services.semantic_search_service import SemanticSearchService
+from app.services.snapshot_memory_service import SnapshotMemoryService
 from app.domain.auth import UserRole
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -123,6 +126,23 @@ def get_copilot_context_service(
         copilot_insights_service,
     )
 
+def get_organizational_snapshot_repository(db: DbSession) -> OrganizationalSnapshotRepository:
+    return OrganizationalSnapshotRepository(db)
+
+def get_memory_insights_service() -> MemoryInsightsService:
+    return MemoryInsightsService()
+
+def get_snapshot_memory_service(
+    analytics_context_service: AnalyticsContextService=Depends(get_analytics_context_service),
+    snapshot_repository: OrganizationalSnapshotRepository=Depends(get_organizational_snapshot_repository),
+    memory_insights_service: MemoryInsightsService=Depends(get_memory_insights_service),
+) -> SnapshotMemoryService:
+    return SnapshotMemoryService(
+        snapshot_repository,
+        analytics_context_service,
+        memory_insights_service,
+    )
+
 def get_business_assistant_service(
     chat_service: ChatService=Depends(get_chat_service),
     semantic_search_service: SemanticSearchService=Depends(get_semantic_search_service),
@@ -133,6 +153,7 @@ def get_business_assistant_service(
     hybrid_context_service: HybridContextService=Depends(get_hybrid_context_service),
     hybrid_insights_service: HybridInsightsService=Depends(get_hybrid_insights_service),
     copilot_context_service: CopilotContextService=Depends(get_copilot_context_service),
+    snapshot_memory_service: SnapshotMemoryService=Depends(get_snapshot_memory_service),
 ) -> BusinessAssistantService:
     return BusinessAssistantService(
         chat_service=chat_service,
@@ -144,6 +165,7 @@ def get_business_assistant_service(
         hybrid_context_service=hybrid_context_service,
         hybrid_insights_service=hybrid_insights_service,
         copilot_context_service=copilot_context_service,
+        snapshot_memory_service=snapshot_memory_service,
     )
 
 def get_rag_service(llm_client: OllamaClientDep) -> RAGService:
