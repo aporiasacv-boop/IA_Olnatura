@@ -141,3 +141,19 @@ def test_memory_question_is_not_executive_question() -> None:
     classifier = QuestionClassifier()
     assert classifier.is_memory_question('¿Qué ha cambiado?') is True
     assert classifier.is_executive_question('¿Qué ha cambiado?') is False
+
+@pytest.mark.parametrize('question', [
+    '¿De dónde sale ese dato?',
+    '¿Qué evidencia tienes?',
+    '¿Qué tan confiable es?',
+    '¿Cómo llegaste a esa conclusión?',
+    '¿Cuál es la fuente?',
+])
+def test_is_governance_question_detects_governance_prompts(question: str) -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_governance_question(question) is True
+
+def test_governance_question_is_not_memory_question() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_governance_question('¿Qué evidencia tienes?') is True
+    assert classifier.is_memory_question('¿Qué evidencia tienes?') is False

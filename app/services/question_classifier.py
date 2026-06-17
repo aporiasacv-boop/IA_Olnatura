@@ -103,6 +103,23 @@ class QuestionClassifier:
         'respecto al snapshot anterior',
     )
 
+    _GOVERNANCE_PHRASES = (
+        'de donde sale ese dato',
+        'de donde sale la informacion',
+        'de donde proviene',
+        'que evidencia tienes',
+        'que evidencia existe',
+        'que tan confiable es',
+        'que tan confiables son',
+        'como llegaste a esa conclusion',
+        'como llegaste a esa conclusión',
+        'cual es la fuente',
+        'cuales son las fuentes',
+        'que fuentes utilizaste',
+        'que fuente utilizaste',
+        'cuando fueron obtenidos los datos',
+    )
+
     _ANALYTICS_INTENTS = frozenset({
         ChatIntent.CUSTOMERS_COUNT,
         ChatIntent.SALES_COUNT,
@@ -142,6 +159,20 @@ class QuestionClassifier:
         if 'hallazgos' in normalized and any(token in normalized for token in ('siguen', 'presentes', 'persisten', 'continuan')):
             return True
         if 'diferencias' in normalized and 'observas' in normalized:
+            return True
+        return False
+
+    def is_governance_question(self, question: str) -> bool:
+        normalized = self._normalize(question)
+        if any(phrase in normalized for phrase in self._GOVERNANCE_PHRASES):
+            return True
+        if 'evidencia' in normalized and any(token in normalized for token in ('tienes', 'existe', 'respald', 'soport')):
+            return True
+        if 'confiable' in normalized and any(token in normalized for token in ('es', 'son', 'tan', 'nivel')):
+            return True
+        if 'fuente' in normalized and any(token in normalized for token in ('cual', 'cuales', 'que', 'origen', 'sale')):
+            return True
+        if 'de donde' in normalized and any(token in normalized for token in ('dato', 'informacion', 'sale', 'viene', 'provien')):
             return True
         return False
 

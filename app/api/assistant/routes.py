@@ -11,6 +11,7 @@ from app.schemas.assistant import (
     HybridAnalysisRequest,
     HybridAnalysisResponse,
 )
+from app.schemas.governance import GovernanceRequest, GovernanceResponse
 from app.services.business_assistant_service import BusinessAssistantService
 
 router = APIRouter()
@@ -60,4 +61,27 @@ def ask_copilot(request: CopilotRequest, service: BusinessAssistantService=Depen
     return CopilotResponse(
         attention_points=result.attention_points,
         answer=result.answer,
+    )
+
+@router.post('/governance', response_model=GovernanceResponse, summary='Gobernanza y trazabilidad empresarial', tags=['Assistant'])
+def ask_governance(request: GovernanceRequest, service: BusinessAssistantService=Depends(get_business_assistant_service)) -> GovernanceResponse:
+    logger.info('Pregunta recibida en POST /assistant/governance')
+    try:
+        result = service.ask_governance(request.question)
+    except OllamaError as exc:
+        logger.error('Error Ollama en gobernanza empresarial: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.message) from exc
+    except RAGError as exc:
+        logger.error('Error en gobernanza empresarial: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
+    return GovernanceResponse(
+        confidence=result.confidence,
+        evidence=result.evidence,
+        answer=result.answer,
+        source_type=result.source_type,
+        source_tables=result.source_tables,
+        source_documents=result.source_documents,
+        snapshot_date=result.snapshot_date,
+        records_analyzed=result.records_analyzed,
+        generated_at=result.generated_at,
     )

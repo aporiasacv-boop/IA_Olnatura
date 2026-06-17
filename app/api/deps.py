@@ -31,6 +31,7 @@ from app.services.document_loader_service import DocumentLoaderService
 from app.services.hybrid_context_service import HybridContextService
 from app.services.hybrid_insights_service import HybridInsightsService
 from app.services.financial_analytics_service import FinancialAnalyticsService
+from app.services.governance_service import GovernanceService
 from app.services.memory_insights_service import MemoryInsightsService
 from app.services.natural_chat_service import NaturalChatService
 from app.services.rag_service import RAGService
@@ -143,6 +144,9 @@ def get_snapshot_memory_service(
         memory_insights_service,
     )
 
+def get_governance_service() -> GovernanceService:
+    return GovernanceService()
+
 def get_business_assistant_service(
     chat_service: ChatService=Depends(get_chat_service),
     semantic_search_service: SemanticSearchService=Depends(get_semantic_search_service),
@@ -154,6 +158,7 @@ def get_business_assistant_service(
     hybrid_insights_service: HybridInsightsService=Depends(get_hybrid_insights_service),
     copilot_context_service: CopilotContextService=Depends(get_copilot_context_service),
     snapshot_memory_service: SnapshotMemoryService=Depends(get_snapshot_memory_service),
+    governance_service: GovernanceService=Depends(get_governance_service),
 ) -> BusinessAssistantService:
     return BusinessAssistantService(
         chat_service=chat_service,
@@ -166,6 +171,7 @@ def get_business_assistant_service(
         hybrid_insights_service=hybrid_insights_service,
         copilot_context_service=copilot_context_service,
         snapshot_memory_service=snapshot_memory_service,
+        governance_service=governance_service,
     )
 
 def get_rag_service(llm_client: OllamaClientDep) -> RAGService:

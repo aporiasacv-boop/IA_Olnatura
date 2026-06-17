@@ -17,6 +17,8 @@ from app.services.question_classifier import QuestionClassifier
 
 from app.services.semantic_search_service import SemanticSearchHit, SemanticSearchResult, SemanticSearchService
 
+from app.services.governance_service import GovernanceService
+
 from app.services.snapshot_memory_service import SnapshotMemoryService
 
 
@@ -96,6 +98,8 @@ def _build_service(
 
     snapshot_memory: MagicMock | None = None,
 
+    governance_service: GovernanceService | None = None,
+
 ) -> BusinessAssistantService:
 
     analytics_context = analytics_context or MagicMock(spec=AnalyticsContextService)
@@ -103,6 +107,8 @@ def _build_service(
     analytics_context.build_snapshot.return_value = _SNAPSHOT
 
     snapshot_memory = snapshot_memory or MagicMock(spec=SnapshotMemoryService)
+
+    governance_service = governance_service or GovernanceService()
 
     return BusinessAssistantService(
 
@@ -117,6 +123,8 @@ def _build_service(
         classifier=classifier or QuestionClassifier(),
 
         snapshot_memory_service=snapshot_memory,
+
+        governance_service=governance_service,
 
     )
 
@@ -697,5 +705,61 @@ def test_ask_memory_logs_memory_mode() -> None:
     assert logger.info.call_args.args[4] == 0
 
     assert logger.info.call_args.args[5] == 1
+
+
+
+def test_ask_routes_governance_question() -> None:
+
+    question = '¿Qué evidencia tienes?'
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(question=question, intent=ChatIntent.UNKNOWN, data=None)
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_governed_response.return_value = 'Farmacias de Similares concentra 42.2% de los ingresos observados.'
+
+    classifier = QuestionClassifier()
+
+    service = _build_service(chat_service, semantic_search, ai_response, classifier=classifier)
+
+    result = service.ask(question)
+
+    assert result.source == 'governance'
+
+    ai_response.generate_governed_response.assert_called_once()
+
+
+
+def test_ask_governance_logs_governance_mode() -> None:
+
+    question = '¿De dónde sale ese dato?'
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(question=question, intent=ChatIntent.UNKNOWN, data=None)
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_governed_response.return_value = 'La informacion proviene de venta_lineas.'
+
+    logger = MagicMock()
+
+    classifier = QuestionClassifier()
+
+    service = _build_service(chat_service, semantic_search, ai_response, classifier=classifier)
+
+    service._logger = logger
+
+    service.ask(question)
+
+    assert logger.info.call_args.args[1] == 'governance'
+
+    assert logger.info.call_args.args[3] is True
 
 

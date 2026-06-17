@@ -131,3 +131,23 @@ def test_generate_memory_analysis_builds_historian_prompt() -> None:
     prompt = llm.generate.call_args.args[0]
     assert 'historiador empresarial' in prompt
     assert 'memory_insights' in prompt
+
+def test_generate_governed_response_builds_audit_prompt() -> None:
+    llm = MagicMock()
+    llm.generate.return_value = 'Farmacias de Similares concentra 42.2% de los ingresos observados.'
+    service = AIResponseService(llm)
+    answer = service.generate_governed_response(
+        question='¿Qué evidencia tienes?',
+        answer='Farmacias de Similares concentra 42.2% de los ingresos observados.',
+        governance_context={
+            'source_type': 'analytics',
+            'source_tables': ['venta_lineas'],
+            'confidence_level': 'HIGH',
+            'evidence': [{'statement': 'Concentracion', 'evidence': ['100 lineas analizadas']}],
+            'limitations': [],
+        },
+    )
+    assert '42.2%' in answer
+    prompt = llm.generate.call_args.args[0]
+    assert 'auditor empresarial' in prompt
+    assert 'Fuente:' in prompt

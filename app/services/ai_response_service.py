@@ -9,6 +9,7 @@ from app.services.prompts.document_response import build_document_response_promp
 from app.services.prompts.executive_summary import build_executive_summary_prompt
 from app.services.prompts.hybrid_business_expert import build_hybrid_business_expert_prompt
 from app.services.prompts.hybrid_response import build_hybrid_response_prompt
+from app.services.prompts.governance_expert import build_governance_expert_prompt
 from app.services.prompts.organizational_memory import build_organizational_memory_prompt
 
 class AIResponseService:
@@ -70,6 +71,14 @@ class AIResponseService:
         prompt = build_organizational_memory_prompt(question=question, memory_context=memory_context)
         return self._llm_client.generate(prompt)
 
+    def generate_governed_response(self, question: str, answer: str, governance_context: dict[str, Any]) -> str:
+        prompt = build_governance_expert_prompt(
+            question=question,
+            answer=answer,
+            governance_context=governance_context,
+        )
+        return self._llm_client.generate(prompt)
+
     @staticmethod
     def build_prompt(question: str, intent: str, data: dict[str, Any] | list[dict[str, Any]] | None) -> str:
         return build_ai_response_prompt(question=question, intent=intent, data=data)
@@ -121,3 +130,11 @@ class AIResponseService:
     @staticmethod
     def build_memory_analysis_prompt(question: str, memory_context: dict[str, Any]) -> str:
         return build_organizational_memory_prompt(question=question, memory_context=memory_context)
+
+    @staticmethod
+    def build_governed_response_prompt(question: str, answer: str, governance_context: dict[str, Any]) -> str:
+        return build_governance_expert_prompt(
+            question=question,
+            answer=answer,
+            governance_context=governance_context,
+        )
