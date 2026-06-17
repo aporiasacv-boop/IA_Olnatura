@@ -29,9 +29,8 @@ class Settings(BaseSettings):
     D365_VENTAS_ENTITY_LABEL: str = 'D365SalesOrderHeaders'
     D365_VENTAS_LINEAS_ENTITY: str = 'D365SalesOrderLines'
     D365_VENTAS_LINEAS_ENTITY_LABEL: str = 'D365SalesOrderLines'
-    SYNC_CLIENTES_MAX_RECORDS: int = 100
-    SYNC_VENTAS_MAX_RECORDS: int = 100
-    SYNC_VENTAS_LINEAS_MAX_RECORDS: int = 100
+    SYNC_START_DATE: str = ''
+    SYNC_END_DATE: str = ''
     ETL_PAGE_SIZE: int = 100
     ETL_MAX_RETRIES: int = 3
     ETL_RETRY_BASE_DELAY: float = 1.0

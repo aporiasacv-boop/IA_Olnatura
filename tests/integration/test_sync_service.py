@@ -16,6 +16,9 @@ def test_sync_service_full_pipeline(integration_db: Session, mock_dynamics_clien
     assert result.clientes.upserted == 2
     assert result.ventas.extracted == 2
     assert result.ventas.upserted == 2
+    assert result.venta_lineas.extracted == 1
+    assert result.venta_lineas.upserted == 1
+    assert result.duration_seconds >= 0
     clientes = integration_db.query(Cliente).all()
     assert len(clientes) == 2
     assert clientes[0].dynamics_id == 'C001'
@@ -28,7 +31,7 @@ def test_sync_service_full_pipeline(integration_db: Session, mock_dynamics_clien
 def test_sync_service_upsert_updates_existing_records(integration_db: Session, mock_dynamics_client: MagicMock) -> None:
     service = SyncService(db=integration_db, dynamics_client=mock_dynamics_client)
     service.run()
-    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100: {'CustomersV3': [{'CustomerAccount': 'C001', 'OrganizationName': 'Cliente Uno Actualizado', 'PrimaryContactEmail': 'nuevo@olnatura.com'}], 'SalesOrderHeadersV2': [{'SalesOrderNumber': 'SO-001', 'OrderingCustomerAccountNumber': 'C001', 'SalesOrderTotalAmount': 9999.99, 'SalesOrderStatus': 'Invoiced'}]}.get(entity, [])
+    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100, odata_filter=None: {'CustomersV3': [{'CustomerAccount': 'C001', 'OrganizationName': 'Cliente Uno Actualizado', 'PrimaryContactEmail': 'nuevo@olnatura.com'}], 'SalesOrderHeadersV2': [{'SalesOrderNumber': 'SO-001', 'OrderingCustomerAccountNumber': 'C001', 'SalesOrderTotalAmount': 9999.99, 'SalesOrderStatus': 'Invoiced'}], 'D365SalesOrderLines': [{'SalesOrderNumber': 'SO-001', 'LineCreationSequenceNumber': 1, 'OrderingCustomerAccountNumber': 'C001', 'ProductNumber': 'P-100', 'LineAmount': 648218.58}]}.get(entity, [])
     result = service.run()
     assert result.status == 'completed'
     assert integration_db.query(Cliente).count() == 2
@@ -42,7 +45,7 @@ def test_sync_service_upsert_updates_existing_records(integration_db: Session, m
 
 def test_sync_service_handles_partial_failure(integration_db: Session, mock_dynamics_client: MagicMock) -> None:
 
-    def side_effect(entity: str, page_size: int=100) -> list:
+    def side_effect(entity: str, page_size: int = 100, odata_filter=None) -> list:
         if entity == 'SalesOrderHeadersV2':
             raise DynamicsODataError('Error OData 500', status_code=500)
         return [{'CustomerAccount': 'C001', 'OrganizationName': 'Cliente Uno SA'}]

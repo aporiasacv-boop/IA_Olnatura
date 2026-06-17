@@ -1,30 +1,39 @@
 import logging
+import time
 from dataclasses import dataclass, field
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.core.config import Settings, settings
+from app.db.schema import ensure_database_schema
 from app.etl.extractors.dynamics_extractor import DynamicsExtractor
+from app.etl.sync_dates import resolve_sync_date_range
 from app.etl.transformers.cliente_transformer import transform_clientes
 from app.etl.transformers.venta_linea_transformer import transform_venta_lineas
 from app.etl.transformers.venta_transformer import transform_ventas
 from app.integrations.dynamics.exceptions import DynamicsError
 from app.integrations.dynamics.protocols import DynamicsClient
-from app.db.schema import ensure_database_schema
 from app.models.venta import Venta
 from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.venta_linea_repository import VentaLineaRepository
 from app.repositories.venta_repository import VentaRepository
-from sqlalchemy import select
 
 @dataclass
 class EntitySyncResult:
     extracted: int = 0
     upserted: int = 0
+    inserted: int = 0
+    updated: int = 0
+    duration_seconds: float = 0.0
 
 @dataclass
 class SyncResult:
     status: str = 'completed'
     clientes: EntitySyncResult = field(default_factory=EntitySyncResult)
     ventas: EntitySyncResult = field(default_factory=EntitySyncResult)
+    venta_lineas: EntitySyncResult = field(default_factory=EntitySyncResult)
+    duration_seconds: float = 0.0
     errors: list[str] = field(default_factory=list)
 
 @dataclass
@@ -33,47 +42,88 @@ class MvpSyncResult:
     read: int = 0
     inserted: int = 0
     updated: int = 0
+    duration_seconds: float = 0.0
     errors: list[str] = field(default_factory=list)
 
 class SyncService:
 
-    def __init__(self, db: Session, dynamics_client: DynamicsClient, app_settings: Settings | None=None, logger: logging.Logger | None=None):
+    def __init__(
+        self,
+        db: Session,
+        dynamics_client: DynamicsClient,
+        app_settings: Settings | None = None,
+        logger: logging.Logger | None = None,
+    ):
         self._db = db
         self._dynamics_client = dynamics_client
         self._settings = app_settings or settings
         self._logger = logger or logging.getLogger(__name__)
-        self._extractor = DynamicsExtractor(dynamics_client, page_size=self._settings.ETL_PAGE_SIZE, max_retries=self._settings.ETL_MAX_RETRIES, retry_base_delay=self._settings.ETL_RETRY_BASE_DELAY, logger=self._logger)
+        self._extractor = DynamicsExtractor(
+            dynamics_client,
+            page_size=self._settings.ETL_PAGE_SIZE,
+            max_retries=self._settings.ETL_MAX_RETRIES,
+            retry_base_delay=self._settings.ETL_RETRY_BASE_DELAY,
+            app_settings=self._settings,
+            logger=self._logger,
+        )
         self._cliente_repo = ClienteRepository(db)
         self._venta_repo = VentaRepository(db)
         self._venta_linea_repo = VentaLineaRepository(db)
 
     def run(self) -> SyncResult:
-        self._logger.info('Iniciando sincronización ETL Dynamics → PostgreSQL')
+        started_at = time.perf_counter()
+        start_date, end_date = resolve_sync_date_range(self._settings)
+        self._logger.info(
+            'Iniciando sincronizacion ETL Dynamics → PostgreSQL rango=%s a %s',
+            start_date,
+            end_date,
+        )
         result = SyncResult()
         self._ensure_tables()
         result.clientes = self._sync_clientes(result.errors)
         result.ventas = self._sync_ventas(result.errors)
+        result.venta_lineas = self._sync_venta_lineas(result.errors)
+        result.duration_seconds = time.perf_counter() - started_at
         if result.errors:
             result.status = 'completed_with_errors'
-            self._logger.warning('Sincronización finalizada con errores: %s', result.errors)
+            self._logger.warning('Sincronizacion finalizada con errores: %s', result.errors)
         else:
-            self._logger.info('Sincronización completada — clientes: %s, ventas: %s', result.clientes.upserted, result.ventas.upserted)
+            self._logger.info(
+                'Sincronizacion completada — clientes=%s ventas=%s venta_lineas=%s duracion=%.2fs',
+                result.clientes.upserted,
+                result.ventas.upserted,
+                result.venta_lineas.upserted,
+                result.duration_seconds,
+            )
+        self._log_entity_metrics('clientes', result.clientes)
+        self._log_entity_metrics('ventas', result.ventas)
+        self._log_entity_metrics('venta_lineas', result.venta_lineas)
+        self._logger.info('sync_duration_seconds=%.2f', result.duration_seconds)
         return result
 
     def run_ventas(self) -> MvpSyncResult:
-        self._logger.info('Iniciando sincronización ventas Dynamics → PostgreSQL')
+        started_at = time.perf_counter()
+        self._logger.info('Iniciando sincronizacion ventas Dynamics → PostgreSQL')
         result = MvpSyncResult(entity=self._settings.D365_VENTAS_ENTITY_LABEL)
         self._ensure_tables()
         entity = self._settings.D365_VENTAS_ENTITY
         try:
-            raw_records = self._extractor.extract_entity(entity, max_records=self._settings.SYNC_VENTAS_MAX_RECORDS)
+            raw_records = self._extractor.extract_entity(entity)
             result.read = len(raw_records)
             transformed = transform_ventas(raw_records)
             self._logger.info('Transformadas %s ventas', len(transformed))
             inserted, updated = self._venta_repo.upsert_many_with_metrics(transformed)
             result.inserted = inserted
             result.updated = updated
-            self._logger.info('Upsert ventas completado: %s insertados, %s actualizados', inserted, updated)
+            result.duration_seconds = time.perf_counter() - started_at
+            self._logger.info(
+                'sync_entity=%s read=%s inserted=%s updated=%s duration_seconds=%.2f',
+                result.entity,
+                result.read,
+                result.inserted,
+                result.updated,
+                result.duration_seconds,
+            )
         except DynamicsError as exc:
             msg = f'Error sincronizando ventas: {exc.message}'
             self._logger.error(msg)
@@ -85,15 +135,13 @@ class SyncService:
         return result
 
     def run_ventas_lineas(self) -> MvpSyncResult:
+        started_at = time.perf_counter()
         self._logger.info('Iniciando sincronizacion lineas de venta Dynamics → PostgreSQL')
         result = MvpSyncResult(entity=self._settings.D365_VENTAS_LINEAS_ENTITY_LABEL)
         self._ensure_tables()
         entity = self._settings.D365_VENTAS_LINEAS_ENTITY
         try:
-            raw_records = self._extractor.extract_entity(
-                entity,
-                max_records=self._settings.SYNC_VENTAS_LINEAS_MAX_RECORDS,
-            )
+            raw_records = self._extractor.extract_entity(entity)
             result.read = len(raw_records)
             transformed = transform_venta_lineas(raw_records)
             transformed = self._enrich_cliente_from_ventas(transformed)
@@ -101,10 +149,14 @@ class SyncService:
             inserted, updated = self._venta_linea_repo.upsert_many_with_metrics(transformed)
             result.inserted = inserted
             result.updated = updated
+            result.duration_seconds = time.perf_counter() - started_at
             self._logger.info(
-                'Upsert lineas de venta completado: %s insertados, %s actualizados',
-                inserted,
-                updated,
+                'sync_entity=%s read=%s inserted=%s updated=%s duration_seconds=%.2f',
+                result.entity,
+                result.read,
+                result.inserted,
+                result.updated,
+                result.duration_seconds,
             )
         except DynamicsError as exc:
             msg = f'Error sincronizando lineas de venta: {exc.message}'
@@ -143,13 +195,22 @@ class SyncService:
     def _sync_clientes(self, errors: list[str]) -> EntitySyncResult:
         entity = self._settings.D365_CLIENTES_ENTITY
         sync_result = EntitySyncResult()
+        started_at = time.perf_counter()
         try:
             raw_records = self._extractor.extract_entity(entity)
             sync_result.extracted = len(raw_records)
             transformed = transform_clientes(raw_records)
             self._logger.info('Transformados %s clientes', len(transformed))
-            sync_result.upserted = self._cliente_repo.upsert_many(transformed)
-            self._logger.info('Upsert clientes completado: %s registros', sync_result.upserted)
+            inserted, updated = self._cliente_repo.upsert_many_with_metrics(transformed)
+            sync_result.inserted = inserted
+            sync_result.updated = updated
+            sync_result.upserted = inserted + updated
+            sync_result.duration_seconds = time.perf_counter() - started_at
+            self._logger.info(
+                'Upsert clientes completado: %s insertados, %s actualizados',
+                inserted,
+                updated,
+            )
         except DynamicsError as exc:
             msg = f'Error sincronizando clientes: {exc.message}'
             self._logger.error(msg)
@@ -163,13 +224,22 @@ class SyncService:
     def _sync_ventas(self, errors: list[str]) -> EntitySyncResult:
         entity = self._settings.D365_VENTAS_ENTITY
         sync_result = EntitySyncResult()
+        started_at = time.perf_counter()
         try:
             raw_records = self._extractor.extract_entity(entity)
             sync_result.extracted = len(raw_records)
             transformed = transform_ventas(raw_records)
             self._logger.info('Transformadas %s ventas', len(transformed))
-            sync_result.upserted = self._venta_repo.upsert_many(transformed)
-            self._logger.info('Upsert ventas completado: %s registros', sync_result.upserted)
+            inserted, updated = self._venta_repo.upsert_many_with_metrics(transformed)
+            sync_result.inserted = inserted
+            sync_result.updated = updated
+            sync_result.upserted = inserted + updated
+            sync_result.duration_seconds = time.perf_counter() - started_at
+            self._logger.info(
+                'Upsert ventas completado: %s insertados, %s actualizados',
+                inserted,
+                updated,
+            )
         except DynamicsError as exc:
             msg = f'Error sincronizando ventas: {exc.message}'
             self._logger.error(msg)
@@ -179,3 +249,43 @@ class SyncService:
             self._logger.exception(msg)
             errors.append(msg)
         return sync_result
+
+    def _sync_venta_lineas(self, errors: list[str]) -> EntitySyncResult:
+        entity = self._settings.D365_VENTAS_LINEAS_ENTITY
+        sync_result = EntitySyncResult()
+        started_at = time.perf_counter()
+        try:
+            raw_records = self._extractor.extract_entity(entity)
+            sync_result.extracted = len(raw_records)
+            transformed = transform_venta_lineas(raw_records)
+            transformed = self._enrich_cliente_from_ventas(transformed)
+            self._logger.info('Transformadas %s lineas de venta', len(transformed))
+            inserted, updated = self._venta_linea_repo.upsert_many_with_metrics(transformed)
+            sync_result.inserted = inserted
+            sync_result.updated = updated
+            sync_result.upserted = inserted + updated
+            sync_result.duration_seconds = time.perf_counter() - started_at
+            self._logger.info(
+                'Upsert lineas de venta completado: %s insertados, %s actualizados',
+                inserted,
+                updated,
+            )
+        except DynamicsError as exc:
+            msg = f'Error sincronizando lineas de venta: {exc.message}'
+            self._logger.error(msg)
+            errors.append(msg)
+        except Exception as exc:
+            msg = f'Error inesperado sincronizando lineas de venta: {exc}'
+            self._logger.exception(msg)
+            errors.append(msg)
+        return sync_result
+
+    def _log_entity_metrics(self, label: str, entity_result: EntitySyncResult) -> None:
+        self._logger.info(
+            'sync_entity=%s read=%s inserted=%s updated=%s duration_seconds=%.2f',
+            label,
+            entity_result.extracted,
+            entity_result.inserted,
+            entity_result.updated,
+            entity_result.duration_seconds,
+        )

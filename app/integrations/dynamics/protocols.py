@@ -13,5 +13,11 @@ class DynamicsClient(Protocol):
     def query_entity(self, entity_name: str, top: int=1) -> dict[str, Any]:
         ...
 
-    def fetch_all_entity(self, entity_name: str, page_size: int=100) -> list[dict[str, Any]]:
+    def fetch_all_entity(
+        self,
+        entity_name: str,
+        page_size: int = 100,
+        *,
+        odata_filter: str | None = None,
+    ) -> list[dict[str, Any]]:
         ...

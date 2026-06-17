@@ -8,7 +8,7 @@ from app.services.sync_service import SyncService
 def test_sync_ventas_lineas_pipeline(integration_db: Session, mock_dynamics_client: MagicMock) -> None:
     integration_db.add(Venta(dynamics_id='SO-001', cliente_dynamics_id='C001', monto=Decimal('0'), estado='Open'))
     integration_db.commit()
-    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100, max_records=None: {
+    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100, odata_filter=None: {
         'D365SalesOrderLines': [{
             'SalesOrderNumber': 'SO-001',
             'LineCreationSequenceNumber': 1,
@@ -35,7 +35,7 @@ def test_sync_ventas_lineas_pipeline(integration_db: Session, mock_dynamics_clie
 def test_sync_ventas_lineas_enriches_customer_from_ventas(integration_db: Session, mock_dynamics_client: MagicMock) -> None:
     integration_db.add(Venta(dynamics_id='390003546', cliente_dynamics_id='C0028', monto=Decimal('0'), estado='Invoiced'))
     integration_db.commit()
-    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100, max_records=None: {
+    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100, odata_filter=None: {
         'D365SalesOrderLines': [{
             'SalesOrderNumber': '390003546',
             'LineCreationSequenceNumber': 1,

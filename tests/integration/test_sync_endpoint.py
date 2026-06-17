@@ -14,6 +14,9 @@ def test_post_sync_endpoint(integration_client: TestClient, integration_db: Sess
     assert data['clientes']['upserted'] == 2
     assert data['ventas']['extracted'] == 2
     assert data['ventas']['upserted'] == 2
+    assert data['venta_lineas']['extracted'] == 1
+    assert data['venta_lineas']['upserted'] == 1
+    assert data['duration_seconds'] >= 0
     assert integration_db.query(Cliente).count() == 2
     assert integration_db.query(Venta).count() == 2
     venta = integration_db.query(Venta).filter_by(dynamics_id='SO-002').one()

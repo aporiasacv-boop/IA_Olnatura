@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
 from typing import Any
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.models.cliente import Cliente
 from app.repositories.upsert import bulk_upsert
 
@@ -10,13 +13,21 @@ class ClienteRepository:
         self.db = db
 
     def upsert_many(self, records: list[dict[str, Any]]) -> int:
+        inserted, updated = self.upsert_many_with_metrics(records)
+        return inserted + updated
+
+    def upsert_many_with_metrics(self, records: list[dict[str, Any]]) -> tuple[int, int]:
         if not records:
-            return 0
+            return 0, 0
+        dynamics_ids = [record['dynamics_id'] for record in records]
+        existing = set(self.db.scalars(select(Cliente.dynamics_id).where(Cliente.dynamics_id.in_(dynamics_ids))).all())
+        inserted = sum(1 for record in records if record['dynamics_id'] not in existing)
+        updated = len(records) - inserted
         now = datetime.now(timezone.utc)
         payload = [{**record, 'synced_at': now, 'updated_at': now} for record in records]
-        count = bulk_upsert(self.db, Cliente.__table__, payload, index_elements=['dynamics_id'])
+        bulk_upsert(self.db, Cliente.__table__, payload, index_elements=['dynamics_id'])
         self.db.commit()
-        return count
+        return inserted, updated
 
     def count(self) -> int:
         from sqlalchemy import func, select

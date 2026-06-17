@@ -22,7 +22,7 @@ def test_sync_ventas_pipeline(integration_db: Session, mock_dynamics_client: Mag
 def test_sync_ventas_upsert_updates_existing(integration_db: Session, mock_dynamics_client: MagicMock) -> None:
     service = SyncService(db=integration_db, dynamics_client=mock_dynamics_client)
     service.run_ventas()
-    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100, max_records=None: [{'SalesOrderNumber': 'SO-001', 'OrderingCustomerAccountNumber': 'C001', 'SalesOrderName': 'Pedido actualizado', 'SalesOrderStatus': 'Invoiced', 'CurrencyCode': 'MXN', 'InvoiceCustomerAccountNumber': 'C001', 'SalesOrderTotalAmount': 9999.99}]
+    mock_dynamics_client.fetch_all_entity.side_effect = lambda entity, page_size=100, odata_filter=None: [{'SalesOrderNumber': 'SO-001', 'OrderingCustomerAccountNumber': 'C001', 'SalesOrderName': 'Pedido actualizado', 'SalesOrderStatus': 'Invoiced', 'CurrencyCode': 'MXN', 'InvoiceCustomerAccountNumber': 'C001', 'SalesOrderTotalAmount': 9999.99}]
     result = service.run_ventas()
     assert result.inserted == 0
     assert result.updated == 1
