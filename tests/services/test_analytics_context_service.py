@@ -73,3 +73,11 @@ def test_build_snapshot_keeps_legacy_sections(analytics_context_service: Analyti
     assert 'top_customers' in payload
     assert 'date_range' in payload
     assert 'insights' in payload
+
+def test_build_snapshot_contains_executive_insights(analytics_context_service: AnalyticsContextService) -> None:
+    payload = analytics_context_service.build_snapshot().to_dict()
+    assert 'executive_insights' in payload
+    assert payload['executive_insights']['top_customer_share'] == pytest.approx(75.0, rel=0.01)
+    assert payload['executive_insights']['dominant_customer'] == 'Beta SA'
+    assert payload['executive_insights']['dominant_product'] == 'Producto Beta'
+    assert payload['executive_insights']['invoice_rate'] == 100.0

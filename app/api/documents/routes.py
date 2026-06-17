@@ -1,15 +1,35 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from app.api.deps import get_document_loader_service, get_semantic_search_service
+from app.api.deps import (
+    get_ai_response_service,
+    get_document_context_service,
+    get_document_insights_service,
+    get_document_loader_service,
+    get_semantic_search_service,
+)
 from app.core.logging import get_logger
 from app.documents.exceptions import DocumentLoaderError, DocumentNotFoundError
 from app.integrations.ollama.exceptions import OllamaError
 from app.rag.exceptions import RAGError
-from app.schemas.documents import DocumentIndexResponse, DocumentPreviewResponse, DocumentQueryRequest, DocumentQueryResponse, DocumentsListResponse, DocumentsReloadResponse, SemanticSearchResultItem
+from app.schemas.documents import (
+    DocumentAnalyzeRequest,
+    DocumentAnalyzeResponse,
+    DocumentIndexResponse,
+    DocumentPreviewResponse,
+    DocumentQueryRequest,
+    DocumentQueryResponse,
+    DocumentsListResponse,
+    DocumentsReloadResponse,
+    SemanticSearchResultItem,
+)
+from app.services.ai_response_service import AIResponseService
+from app.services.document_context_service import DocumentContextService
+from app.services.document_insights_service import DocumentInsightsService
 from app.services.document_loader_service import DocumentLoaderService
 from app.services.semantic_search_service import SemanticSearchService
 
 router = APIRouter()
 logger = get_logger(__name__)
+_EMPTY_DOCUMENT_ANSWER = 'No se encontraron fragmentos relevantes en los documentos indexados para responder la pregunta.'
 
 @router.get('', response_model=DocumentsListResponse, summary='Listar documentos del catalogo', tags=['Documents'])
 def list_documents(service: DocumentLoaderService=Depends(get_document_loader_service)) -> DocumentsListResponse:
@@ -63,3 +83,44 @@ def query_documents(request: DocumentQueryRequest, service: SemanticSearchServic
         logger.error('Error en consulta semantica: %s', exc.message)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
     return DocumentQueryResponse(query=result.query, results=[SemanticSearchResultItem(document=item.document, score=item.score, content=item.content) for item in result.results])
+
+@router.post('/analyze', response_model=DocumentAnalyzeResponse, summary='Analisis documental empresarial', tags=['Documents'])
+def analyze_documents(
+    request: DocumentAnalyzeRequest,
+    context_service: DocumentContextService=Depends(get_document_context_service),
+    insights_service: DocumentInsightsService=Depends(get_document_insights_service),
+    ai_response_service: AIResponseService=Depends(get_ai_response_service),
+) -> DocumentAnalyzeResponse:
+    logger.info('Analisis documental recibido via POST /documents/analyze')
+    try:
+        document_context = context_service.build_context(request.query)
+        document_insights = insights_service.build_insights(document_context)
+        if document_context.total_matches == 0:
+            return DocumentAnalyzeResponse(
+                confidence_level=document_insights.confidence_level,
+                sources=[],
+                answer=_EMPTY_DOCUMENT_ANSWER,
+            )
+        answer = ai_response_service.generate_document_analysis(
+            question=request.query,
+            document_context=document_context.to_dict(),
+            document_insights=document_insights.to_dict(),
+        )
+    except OllamaError as exc:
+        logger.error('Error de LLM en analisis documental: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.message) from exc
+    except RAGError as exc:
+        logger.error('Error en analisis documental: %s', exc.message)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
+    logger.info(
+        'document_mode=true top_document=%s confidence_level=%s total_matches=%s average_score=%s',
+        document_insights.top_document,
+        document_insights.confidence_level,
+        document_insights.total_matches,
+        document_insights.average_score,
+    )
+    return DocumentAnalyzeResponse(
+        confidence_level=document_insights.confidence_level,
+        sources=document_insights.source_documents,
+        answer=answer.strip(),
+    )

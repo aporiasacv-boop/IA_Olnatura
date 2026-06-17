@@ -22,7 +22,11 @@ from app.services.business_interpretation_service import BusinessInterpretationS
 from app.services.ai_response_service import AIResponseService
 from app.services.chat_service import ChatService
 from app.services.business_assistant_service import BusinessAssistantService
+from app.services.document_context_service import DocumentContextService
+from app.services.document_insights_service import DocumentInsightsService
 from app.services.document_loader_service import DocumentLoaderService
+from app.services.hybrid_context_service import HybridContextService
+from app.services.hybrid_insights_service import HybridInsightsService
 from app.services.financial_analytics_service import FinancialAnalyticsService
 from app.services.natural_chat_service import NaturalChatService
 from app.services.rag_service import RAGService
@@ -64,6 +68,14 @@ def get_semantic_search_service() -> SemanticSearchService:
     vector_store = create_vector_store(embeddings)
     return SemanticSearchService(vector_store=vector_store, documents_dir=Path(settings.DOCUMENTS_DIR))
 
+def get_document_context_service(
+    semantic_search_service: SemanticSearchService=Depends(get_semantic_search_service),
+) -> DocumentContextService:
+    return DocumentContextService(semantic_search_service)
+
+def get_document_insights_service() -> DocumentInsightsService:
+    return DocumentInsightsService()
+
 def get_financial_analytics_repository(db: DbSession) -> FinancialAnalyticsRepository:
     return FinancialAnalyticsRepository(db)
 
@@ -81,17 +93,39 @@ def get_analytics_context_service(
         financial_analytics_service=financial_analytics_service,
     )
 
+def get_hybrid_context_service(
+    analytics_context_service: AnalyticsContextService=Depends(get_analytics_context_service),
+    document_context_service: DocumentContextService=Depends(get_document_context_service),
+    document_insights_service: DocumentInsightsService=Depends(get_document_insights_service),
+) -> HybridContextService:
+    return HybridContextService(
+        analytics_context_service,
+        document_context_service,
+        document_insights_service,
+    )
+
+def get_hybrid_insights_service() -> HybridInsightsService:
+    return HybridInsightsService()
+
 def get_business_assistant_service(
     chat_service: ChatService=Depends(get_chat_service),
     semantic_search_service: SemanticSearchService=Depends(get_semantic_search_service),
     ai_response_service: AIResponseService=Depends(get_ai_response_service),
     analytics_context_service: AnalyticsContextService=Depends(get_analytics_context_service),
+    document_context_service: DocumentContextService=Depends(get_document_context_service),
+    document_insights_service: DocumentInsightsService=Depends(get_document_insights_service),
+    hybrid_context_service: HybridContextService=Depends(get_hybrid_context_service),
+    hybrid_insights_service: HybridInsightsService=Depends(get_hybrid_insights_service),
 ) -> BusinessAssistantService:
     return BusinessAssistantService(
         chat_service=chat_service,
         semantic_search_service=semantic_search_service,
         ai_response_service=ai_response_service,
         analytics_context_service=analytics_context_service,
+        document_context_service=document_context_service,
+        document_insights_service=document_insights_service,
+        hybrid_context_service=hybrid_context_service,
+        hybrid_insights_service=hybrid_insights_service,
     )
 
 def get_rag_service(llm_client: OllamaClientDep) -> RAGService:

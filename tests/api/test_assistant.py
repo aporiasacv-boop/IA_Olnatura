@@ -75,3 +75,27 @@ def test_post_assistant_hybrid_response() -> None:
     data = response.json()
     assert data['source'] == 'hybrid'
     assert '100 clientes' in data['answer']
+
+def test_post_assistant_hybrid_analysis_endpoint() -> None:
+    from app.services.business_assistant_service import HybridAnalysisResult
+    mock_service = MagicMock(spec=BusinessAssistantService)
+    mock_service.analyze_hybrid.return_value = HybridAnalysisResult(
+        confidence='MEDIUM',
+        sources=['Manual_Clientes.pdf'],
+        answer='Hay 100 clientes y se registran segun Manual_Clientes.pdf.',
+    )
+    app.dependency_overrides[get_business_assistant_service] = lambda: mock_service
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                '/assistant/hybrid-analysis',
+                json={'question': '¿Cuántos clientes tenemos y cómo se registran?'},
+            )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    data = response.json()
+    assert data['confidence'] == 'MEDIUM'
+    assert data['sources'] == ['Manual_Clientes.pdf']
+    assert '100 clientes' in data['answer']
+    mock_service.analyze_hybrid.assert_called_once_with('¿Cuántos clientes tenemos y cómo se registran?')

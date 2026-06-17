@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from app.domain.analytics_context import AnalyticsContextSnapshot, AnalyticsDateRange, AnalyticsInsights, CustomerConcentration
+from app.domain.executive_insights import ExecutiveInsights
 
 from app.domain.chat import ChatIntent
 
@@ -63,6 +64,17 @@ _SNAPSHOT = AnalyticsContextSnapshot(
         'sales_by_status': [{'status': 'Invoiced', 'count': 200, 'total_revenue': '2400000.00'}],
 
     },
+
+    executive_insights=ExecutiveInsights(
+        top_customer_share=42.0,
+        top_5_customer_share=72.0,
+        top_product_share=32.0,
+        dominant_customer='Alpha',
+        dominant_product='Producto A',
+        invoice_rate=100.0,
+        revenue_concentration='Concentracion comercial moderada',
+        risk_flags=['Concentracion comercial moderada'],
+    ),
 
 )
 
@@ -148,7 +160,7 @@ def test_ask_routes_to_analytics_with_full_snapshot() -> None:
 
 
 
-def test_ask_routes_executive_question_to_analytics_snapshot() -> None:
+def test_ask_routes_executive_question_to_executive_summary() -> None:
 
     chat_service = MagicMock(spec=ChatService)
 
@@ -166,15 +178,55 @@ def test_ask_routes_executive_question_to_analytics_snapshot() -> None:
 
     ai_response = MagicMock(spec=AIResponseService)
 
-    ai_response.generate_business_analysis.return_value = 'Resumen ejecutivo generado.'
+    ai_response.generate_executive_summary.return_value = 'Resumen ejecutivo generado.'
 
     service = _build_service(chat_service, semantic_search, ai_response)
 
     result = service.ask('Dame un resumen ejecutivo de ventas')
 
-    assert result.source == 'analytics'
+    assert result.source == 'executive'
 
-    ai_response.generate_business_analysis.assert_called_once()
+    ai_response.generate_executive_summary.assert_called_once()
+
+    ai_response.generate_business_analysis.assert_not_called()
+
+
+
+def test_ask_executive_logs_executive_mode() -> None:
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(
+
+        question='¿Hay riesgos comerciales?',
+
+        intent=ChatIntent.UNKNOWN,
+
+        data=None,
+
+    )
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_executive_summary.return_value = 'Se observan riesgos de concentracion.'
+
+    logger = MagicMock()
+
+    service = _build_service(chat_service, semantic_search, ai_response)
+
+    service._logger = logger
+
+    result = service.ask('¿Hay riesgos comerciales?')
+
+    assert result.source == 'executive'
+
+    logger.info.assert_called_once()
+
+    assert logger.info.call_args.args[1] == 'executive'
+
+    assert logger.info.call_args.args[3] is True
 
 
 
@@ -202,9 +254,11 @@ def test_ask_routes_to_documents_for_unknown_intent() -> None:
 
     )
 
+    semantic_search.get_metadata_entries.return_value = {}
+
     ai_response = MagicMock(spec=AIResponseService)
 
-    ai_response.generate_from_documents.return_value = 'El objeto social de la empresa es comercializar productos naturales.'
+    ai_response.generate_document_analysis.return_value = 'El objeto social de la empresa es comercializar productos naturales.'
 
     service = _build_service(chat_service, semantic_search, ai_response)
 
@@ -212,9 +266,9 @@ def test_ask_routes_to_documents_for_unknown_intent() -> None:
 
     assert result.source == 'documents'
 
-    semantic_search.search.assert_called_once_with('¿Cuál es el objeto social de la empresa?')
+    semantic_search.search.assert_called_once_with('¿Cuál es el objeto social de la empresa?', top_k=None)
 
-    ai_response.generate_from_documents.assert_called_once()
+    ai_response.generate_document_analysis.assert_called_once()
 
 
 
@@ -236,6 +290,8 @@ def test_ask_documents_returns_message_when_no_results() -> None:
 
     semantic_search.search.return_value = SemanticSearchResult(query='¿Cuál es el objeto social?', results=[])
 
+    semantic_search.get_metadata_entries.return_value = {}
+
     ai_response = MagicMock(spec=AIResponseService)
 
     service = _build_service(chat_service, semantic_search, ai_response)
@@ -246,7 +302,53 @@ def test_ask_documents_returns_message_when_no_results() -> None:
 
     assert 'No se encontraron fragmentos relevantes' in result.answer
 
-    ai_response.generate_from_documents.assert_not_called()
+    ai_response.generate_document_analysis.assert_not_called()
+
+
+
+def test_ask_documents_logs_document_mode() -> None:
+
+    chat_service = MagicMock(spec=ChatService)
+
+    chat_service.process.return_value = ChatResult(
+
+        question='¿Qué hace el analista de procesos?',
+
+        intent=ChatIntent.UNKNOWN,
+
+        data=None,
+
+    )
+
+    semantic_search = MagicMock(spec=SemanticSearchService)
+
+    semantic_search.search.return_value = SemanticSearchResult(
+
+        query='¿Qué hace el analista de procesos?',
+
+        results=[SemanticSearchHit(document='Manual_Analista_Procesos.pdf', score=0.91, content='Documenta procesos.')],
+
+    )
+
+    semantic_search.get_metadata_entries.return_value = {}
+
+    ai_response = MagicMock(spec=AIResponseService)
+
+    ai_response.generate_document_analysis.return_value = 'Segun Manual_Analista_Procesos.pdf...'
+
+    logger = MagicMock()
+
+    service = _build_service(chat_service, semantic_search, ai_response)
+
+    service._logger = logger
+
+    result = service.ask('¿Qué hace el analista de procesos?')
+
+    assert result.source == 'documents'
+
+    assert logger.info.call_args.args[3] is True
+
+    assert logger.info.call_args.args[5] == 'HIGH'
 
 
 
@@ -310,9 +412,11 @@ def test_ask_routes_to_hybrid_with_full_snapshot() -> None:
 
     )
 
+    semantic_search.get_metadata_entries.return_value = {}
+
     ai_response = MagicMock(spec=AIResponseService)
 
-    ai_response.generate_hybrid.return_value = 'Hay 100 clientes y se registran en el modulo de ventas.'
+    ai_response.generate_hybrid_business_analysis.return_value = 'Hay 100 clientes y se registran en el modulo de ventas.'
 
     classifier = QuestionClassifier()
 
@@ -322,11 +426,11 @@ def test_ask_routes_to_hybrid_with_full_snapshot() -> None:
 
     assert result.source == 'hybrid'
 
-    ai_response.generate_hybrid.assert_called_once()
+    ai_response.generate_hybrid_business_analysis.assert_called_once()
 
-    fused_context = ai_response.generate_hybrid.call_args.kwargs['context']
+    call_kwargs = ai_response.generate_hybrid_business_analysis.call_args.kwargs
 
-    assert fused_context.analytics_data['summary']['total_customers'] == 100
+    assert call_kwargs['hybrid_context']['analytics_snapshot']['summary']['total_customers'] == 100
 
 
 
@@ -356,9 +460,11 @@ def test_ask_hybrid_logs_analytics_and_document_hits() -> None:
 
     )
 
+    semantic_search.get_metadata_entries.return_value = {}
+
     ai_response = MagicMock(spec=AIResponseService)
 
-    ai_response.generate_hybrid.return_value = 'El ticket promedio es 100 y el procedimiento inicia con la cotizacion.'
+    ai_response.generate_hybrid_business_analysis.return_value = 'El ticket promedio es 100 y el procedimiento inicia con la cotizacion.'
 
     logger = MagicMock()
 
@@ -372,9 +478,11 @@ def test_ask_hybrid_logs_analytics_and_document_hits() -> None:
 
     assert logger.info.call_args.args[1] == 'hybrid'
 
-    assert logger.info.call_args.args[3] == 1
+    assert logger.info.call_args.args[3] is True
 
-    assert logger.info.call_args.args[4] == 1
+    assert logger.info.call_args.args[9] == 1
+
+    assert logger.info.call_args.args[10] == 1
 
 
 
@@ -398,9 +506,11 @@ def test_ask_hybrid_with_no_document_results_still_uses_hybrid_path() -> None:
 
     semantic_search.search.return_value = SemanticSearchResult(query=question, results=[])
 
+    semantic_search.get_metadata_entries.return_value = {}
+
     ai_response = MagicMock(spec=AIResponseService)
 
-    ai_response.generate_hybrid.return_value = 'Hay 5 pedidos. No hay procedimiento documental disponible.'
+    ai_response.generate_hybrid_business_analysis.return_value = 'Hay 5 pedidos. No hay procedimiento documental disponible.'
 
     classifier = QuestionClassifier()
 
@@ -410,10 +520,8 @@ def test_ask_hybrid_with_no_document_results_still_uses_hybrid_path() -> None:
 
     assert result.source == 'hybrid'
 
-    fused_context = ai_response.generate_hybrid.call_args.kwargs['context']
+    call_kwargs = ai_response.generate_hybrid_business_analysis.call_args.kwargs
 
-    assert fused_context.document_hits == 0
-
-    assert fused_context.analytics_hits == 1
+    assert call_kwargs['hybrid_context']['document_context']['total_matches'] == 0
 
 

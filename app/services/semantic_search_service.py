@@ -5,6 +5,7 @@ from pathlib import Path
 from langchain_core.documents import Document
 from app.core.config import Settings, settings
 from app.documents.text_extractor import SUPPORTED_EXTENSIONS, extract_text
+from app.domain.document_metadata import DocumentMetadataEntry, infer_document_type, utc_now_iso
 from app.rag.chunking import split_documents
 from app.rag.index_manifest import IndexManifestStore
 from app.rag.protocols import VectorStoreProtocol
@@ -38,19 +39,20 @@ class SemanticSearchService:
 
     def index_all(self) -> SemanticIndexResult:
         self._documents_dir.mkdir(parents=True, exist_ok=True)
-        manifest = self._load_manifest()
+        entries = self._load_entries()
         current_files = {path.name for path in self._iter_document_files()}
         if not current_files:
             self._logger.warning('No hay documentos indexables en %s', self._documents_dir)
-        for stale_name in list(manifest.keys()):
+        for stale_name in list(entries.keys()):
             if stale_name not in current_files:
                 self._vector_store.delete_by_document(stale_name)
-                del manifest[stale_name]
+                self._manifest_store.remove_entry(stale_name)
+                del entries[stale_name]
         chunks_indexed = 0
-        documents_indexed = 0
         for file_path in self._iter_document_files():
             file_hash = self._file_hash(file_path)
-            if manifest.get(file_path.name) == file_hash:
+            existing = entries.get(file_path.name)
+            if existing is not None and existing.file_hash == file_hash:
                 continue
             self._vector_store.delete_by_document(file_path.name)
             text = extract_text(file_path)
@@ -60,25 +62,39 @@ class SemanticSearchService:
                 chunk.metadata['source'] = file_path.name
                 chunk.metadata['file_hash'] = file_hash
                 chunk.metadata['chunk_index'] = index
-            chunks_indexed += self._vector_store.add_documents(chunks)
-            manifest[file_path.name] = file_hash
-            documents_indexed += 1
-        self._manifest_store.save(manifest)
+            chunk_count = self._vector_store.add_documents(chunks)
+            chunks_indexed += chunk_count
+            entry = DocumentMetadataEntry(
+                file_hash=file_hash,
+                document_name=file_path.name,
+                document_type=infer_document_type(file_path.name),
+                file_extension=file_path.suffix.lower(),
+                indexed_at=utc_now_iso(),
+                chunk_count=chunk_count,
+            )
+            self._manifest_store.upsert_entry(entry)
+            entries[file_path.name] = entry
         self._logger.info(
             'Indexacion completada documents=%s chunks_nuevos=%s total_chunks=%s',
-            len(manifest),
+            len(entries),
             chunks_indexed,
             self._vector_store.count_chunks(),
         )
-        return SemanticIndexResult(documents=len(manifest), chunks=chunks_indexed, status='indexed')
+        return SemanticIndexResult(documents=len(entries), chunks=chunks_indexed, status='indexed')
+
+    def get_metadata_entries(self) -> dict[str, DocumentMetadataEntry]:
+        return self._manifest_store.load_entries()
+
+    def _load_entries(self) -> dict[str, DocumentMetadataEntry]:
+        entries = self._manifest_store.load_entries()
+        if entries and self._vector_store.count_chunks() == 0:
+            self._logger.warning('Manifest con entradas pero coleccion Chroma vacia; reiniciando indexacion')
+            self._manifest_store.save_entries({})
+            return {}
+        return entries
 
     def _load_manifest(self) -> dict[str, str]:
-        manifest = self._manifest_store.load()
-        if manifest and self._vector_store.count_chunks() == 0:
-            self._logger.warning('Manifest con entradas pero coleccion Chroma vacia; reiniciando indexacion')
-            self._manifest_store.save({})
-            return {}
-        return manifest
+        return {name: entry.file_hash for name, entry in self._load_entries().items()}
 
     def search(self, query: str, top_k: int | None=None) -> SemanticSearchResult:
         limit = top_k if top_k is not None else self._settings.RAG_TOP_K

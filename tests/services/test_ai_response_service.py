@@ -27,6 +27,20 @@ def test_build_prompt_exposes_prompt_builder() -> None:
     assert 'sales_count' in prompt
     assert '"total_sales_orders": 5' in prompt
 
+def test_generate_document_analysis_builds_expert_prompt() -> None:
+    llm = MagicMock()
+    llm.generate.return_value = 'Segun Manual.pdf, el analista documenta procesos. Nivel de confianza: ALTO.'
+    service = AIResponseService(llm)
+    answer = service.generate_document_analysis(
+        question='¿Qué hace el analista de procesos?',
+        document_context={'documents': [], 'sources': ['Manual.pdf'], 'context': 'texto'},
+        document_insights={'confidence_level': 'HIGH', 'source_documents': ['Manual.pdf']},
+    )
+    assert 'analista' in answer
+    prompt = llm.generate.call_args.args[0]
+    assert 'especialista documental corporativo' in prompt
+    assert 'INSIGHTS DOCUMENTALES' in prompt
+
 def test_generate_from_documents_builds_document_prompt() -> None:
     llm = MagicMock()
     llm.generate.return_value = 'El objeto social es comercializar productos naturales.'
@@ -38,6 +52,20 @@ def test_generate_from_documents_builds_document_prompt() -> None:
     assert 'comercializar' in answer
     prompt = llm.generate.call_args.args[0]
     assert 'FRAGMENTOS DOCUMENTALES' in prompt
+
+def test_generate_hybrid_business_analysis_builds_expert_prompt() -> None:
+    llm = MagicMock()
+    llm.generate.return_value = 'Hay 100 clientes y se registran segun Manual_Clientes.pdf.'
+    service = AIResponseService(llm)
+    answer = service.generate_hybrid_business_analysis(
+        question='¿Cuántos clientes tenemos y cómo se registran?',
+        hybrid_context={'analytics_snapshot': {'summary': {'total_customers': 100}}},
+        hybrid_insights={'confidence': 'MEDIUM', 'cross_source_findings': []},
+    )
+    assert '100 clientes' in answer
+    prompt = llm.generate.call_args.args[0]
+    assert 'consultor empresarial senior' in prompt
+    assert 'CONTEXTO HIBRIDO' in prompt
 
 def test_generate_hybrid_builds_fused_prompt() -> None:
     from app.services.context_fusion_service import FusedContext

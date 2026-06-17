@@ -60,6 +60,18 @@ def test_is_hybrid_false_for_documents_only() -> None:
     assert classifier.is_hybrid('¿Cuál es el procedimiento de ventas?') is False
 
 @pytest.mark.parametrize('question', [
+    '¿Cuántos clientes tenemos y cómo se registran?',
+    '¿Qué cliente genera más ingresos y cuál es el procedimiento para gestionarlo?',
+    '¿Cuál es nuestro producto principal y qué documentación existe?',
+    '¿Qué observas en ventas considerando los procedimientos actuales?',
+    '¿Qué riesgos comerciales observas y qué documentos los respaldan?',
+])
+def test_is_advanced_hybrid_detects_complex_questions(question: str) -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_advanced_hybrid(question) is True
+    assert classifier.is_hybrid(question) is True
+
+@pytest.mark.parametrize('question', [
     '¿Cómo está distribuida nuestra cartera?',
     '¿Qué observas en las ventas?',
     'Dame un resumen ejecutivo de ventas',
@@ -80,3 +92,26 @@ def test_is_analytics_question_for_executive_prompts(question: str) -> None:
 def test_resolve_intent_top_customers_synonyms(question: str) -> None:
     classifier = QuestionClassifier()
     assert classifier.resolve_intent(question) == ChatIntent.TOP_CUSTOMERS
+
+@pytest.mark.parametrize('question', [
+    'Dame un resumen ejecutivo',
+    '¿Qué observas en las ventas?',
+    '¿Qué hallazgos importantes ves?',
+    '¿Hay riesgos comerciales?',
+    '¿Dependemos de pocos clientes?',
+    '¿Existe concentración comercial?',
+    '¿Qué te llama la atención?',
+])
+def test_is_executive_question_detects_executive_prompts(question: str) -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_executive_question(question) is True
+
+def test_is_executive_question_false_for_metric_questions() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_executive_question('¿Cuántos clientes tenemos?') is False
+    assert classifier.is_executive_question('¿Cuál es el monto total vendido?') is False
+
+def test_executive_question_is_also_analytics_question() -> None:
+    classifier = QuestionClassifier()
+    assert classifier.is_executive_question('Dame un resumen ejecutivo') is True
+    assert classifier.is_analytics_question('Dame un resumen ejecutivo') is True

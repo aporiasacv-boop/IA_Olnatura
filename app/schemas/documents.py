@@ -27,3 +27,11 @@ class DocumentPreviewResponse(BaseModel):
 
 class DocumentsReloadResponse(BaseModel):
     documents: list[str] = Field(default_factory=list, description='Catalogo actualizado tras el reescaneo')
+
+class DocumentAnalyzeRequest(BaseModel):
+    query: str = Field(..., min_length=1, description='Pregunta sobre documentos indexados', examples=['¿Qué hace el analista de procesos?'])
+
+class DocumentAnalyzeResponse(BaseModel):
+    confidence_level: str = Field(..., description='Nivel de confianza documental: HIGH, MEDIUM o LOW')
+    sources: list[str] = Field(default_factory=list, description='Documentos fuente utilizados')
+    answer: str = Field(..., description='Respuesta empresarial basada en documentos')

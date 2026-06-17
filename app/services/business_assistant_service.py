@@ -1,104 +1,231 @@
-import logging
-import time
-from dataclasses import dataclass
-from app.services.ai_response_service import AIResponseService
-from app.services.analytics_context_service import AnalyticsContextService
-from app.services.chat_service import ChatService
-from app.services.context_fusion_service import ContextFusionService
-from app.services.question_classifier import QuestionClassifier
-from app.services.semantic_search_service import SemanticSearchService
-
-_EMPTY_DOCUMENT_CONTEXT_ANSWER = 'No se encontraron fragmentos relevantes en los documentos indexados para responder la pregunta.'
-
-@dataclass(frozen=True)
-class AssistantResult:
-    source: str
-    answer: str
-
-class BusinessAssistantService:
-
-    def __init__(
-        self,
-        chat_service: ChatService,
-        semantic_search_service: SemanticSearchService,
-        ai_response_service: AIResponseService,
-        analytics_context_service: AnalyticsContextService,
-        context_fusion_service: ContextFusionService | None = None,
-        classifier: QuestionClassifier | None = None,
-        logger: logging.Logger | None = None,
-    ):
-        self._chat_service = chat_service
-        self._semantic_search_service = semantic_search_service
-        self._ai_response_service = ai_response_service
-        self._analytics_context_service = analytics_context_service
-        self._context_fusion_service = context_fusion_service or ContextFusionService()
-        self._classifier = classifier or QuestionClassifier()
-        self._logger = logger or logging.getLogger(__name__)
-
-    def ask(self, question: str) -> AssistantResult:
-        started_at = time.perf_counter()
-        chat_result = self._chat_service.process(question)
-        if self._classifier.is_hybrid(question):
-            route_selected = 'hybrid'
-            response_source = 'hybrid'
-            answer, analytics_hits, document_hits = self._answer_hybrid(question, chat_result.intent.value)
-        elif self._classifier.is_analytics_question(question):
-            route_selected = 'analytics'
-            response_source = 'analytics'
-            analytics_hits = 1
-            document_hits = 0
-            answer = self._answer_analytics(question)
-        else:
-            route_selected = 'documents'
-            response_source = 'documents'
-            analytics_hits = 0
-            answer, document_hits = self._answer_from_documents(question)
-        execution_time_ms = (time.perf_counter() - started_at) * 1000
-        self._logger.info(
-            'route_selected=%s response_source=%s analytics_hits=%s document_hits=%s execution_time_ms=%.2f',
-            route_selected,
-            response_source,
-            analytics_hits,
-            document_hits,
-            execution_time_ms,
-        )
-        return AssistantResult(source=response_source, answer=answer.strip())
-
-    def _answer_analytics(self, question: str) -> str:
-        snapshot = self._analytics_context_service.build_snapshot().to_dict()
-        return self._ai_response_service.generate_business_analysis(question=question, snapshot=snapshot)
-
-    def _answer_hybrid(self, question: str, intent: str) -> tuple[str, int, int]:
-        search_result = self._semantic_search_service.search(question)
-        document_results = [
-            {
-                'document': item.document,
-                'score': item.score,
-                'content': item.content,
-            }
-            for item in search_result.results
-        ]
-        snapshot = self._analytics_context_service.build_snapshot().to_dict()
-        fused_context = self._context_fusion_service.fuse(
-            intent=intent,
-            analytics_data=snapshot,
-            document_results=document_results,
-        )
-        answer = self._ai_response_service.generate_hybrid(question=question, context=fused_context)
-        return answer, fused_context.analytics_hits, fused_context.document_hits
-
-    def _answer_from_documents(self, question: str) -> tuple[str, int]:
-        search_result = self._semantic_search_service.search(question)
-        if not search_result.results:
-            return _EMPTY_DOCUMENT_CONTEXT_ANSWER, 0
-        context = [
-            {
-                'document': item.document,
-                'score': item.score,
-                'content': item.content,
-            }
-            for item in search_result.results
-        ]
-        answer = self._ai_response_service.generate_from_documents(question=question, results=context)
-        return answer, len(context)
-
+import logging
+import time
+from dataclasses import dataclass
+from app.services.ai_response_service import AIResponseService
+from app.services.analytics_context_service import AnalyticsContextService
+from app.services.chat_service import ChatService
+from app.services.document_context_service import DocumentContextService
+from app.services.document_insights_service import DocumentInsightsService
+from app.services.hybrid_context_service import HybridContextService
+from app.services.hybrid_insights_service import HybridInsightsService
+from app.services.question_classifier import QuestionClassifier
+from app.services.semantic_search_service import SemanticSearchService
+
+_EMPTY_DOCUMENT_CONTEXT_ANSWER = 'No se encontraron fragmentos relevantes en los documentos indexados para responder la pregunta.'
+
+@dataclass(frozen=True)
+class AssistantResult:
+    source: str
+    answer: str
+
+@dataclass(frozen=True)
+class HybridAnalysisResult:
+    confidence: str
+    sources: list[str]
+    answer: str
+
+class BusinessAssistantService:
+
+    def __init__(
+        self,
+        chat_service: ChatService,
+        semantic_search_service: SemanticSearchService,
+        ai_response_service: AIResponseService,
+        analytics_context_service: AnalyticsContextService,
+        document_context_service: DocumentContextService | None = None,
+        document_insights_service: DocumentInsightsService | None = None,
+        hybrid_context_service: HybridContextService | None = None,
+        hybrid_insights_service: HybridInsightsService | None = None,
+        classifier: QuestionClassifier | None = None,
+        logger: logging.Logger | None = None,
+    ):
+        self._chat_service = chat_service
+        self._semantic_search_service = semantic_search_service
+        self._ai_response_service = ai_response_service
+        self._analytics_context_service = analytics_context_service
+        self._document_context_service = document_context_service or DocumentContextService(semantic_search_service)
+        self._document_insights_service = document_insights_service or DocumentInsightsService()
+        self._hybrid_context_service = hybrid_context_service or HybridContextService(
+            analytics_context_service,
+            self._document_context_service,
+            self._document_insights_service,
+        )
+        self._hybrid_insights_service = hybrid_insights_service or HybridInsightsService()
+        self._classifier = classifier or QuestionClassifier()
+        self._logger = logger or logging.getLogger(__name__)
+
+    def ask(self, question: str) -> AssistantResult:
+        started_at = time.perf_counter()
+        chat_result = self._chat_service.process(question)
+        executive_mode = False
+        document_mode = False
+        hybrid_mode = False
+        if self._classifier.is_hybrid(question):
+            route_selected = 'hybrid'
+            response_source = 'hybrid'
+            hybrid_mode = True
+            answer, analytics_hits, document_hits, hybrid_insights = self._answer_hybrid(question)
+        elif self._classifier.is_executive_question(question):
+            route_selected = 'executive'
+            response_source = 'executive'
+            executive_mode = True
+            analytics_hits = 1
+            document_hits = 0
+            answer, executive_insights = self._answer_executive(question)
+            document_insights = None
+            hybrid_insights = None
+        elif self._classifier.is_analytics_question(question):
+            route_selected = 'analytics'
+            response_source = 'analytics'
+            analytics_hits = 1
+            document_hits = 0
+            answer = self._answer_analytics(question)
+            executive_insights = None
+            document_insights = None
+            hybrid_insights = None
+        else:
+            route_selected = 'documents'
+            response_source = 'documents'
+            analytics_hits = 0
+            document_mode = True
+            answer, document_hits, document_insights = self._answer_from_documents(question)
+            executive_insights = None
+            hybrid_insights = None
+        execution_time_ms = (time.perf_counter() - started_at) * 1000
+        if hybrid_mode and hybrid_insights is not None:
+            self._logger.info(
+                'route_selected=%s response_source=%s hybrid_mode=%s analytics_used=%s documents_used=%s executive_used=%s cross_source_findings_count=%s confidence=%s analytics_hits=%s document_hits=%s execution_time_ms=%.2f',
+                route_selected,
+                response_source,
+                True,
+                True,
+                int(hybrid_insights.get('documents_used', document_hits > 0)),
+                bool(hybrid_insights.get('executive_used')),
+                len(hybrid_insights.get('cross_source_findings', [])),
+                hybrid_insights.get('confidence'),
+                analytics_hits,
+                document_hits,
+                execution_time_ms,
+            )
+        elif executive_mode and executive_insights is not None:
+            self._logger.info(
+                'route_selected=%s response_source=%s executive_mode=%s risk_flags_count=%s top_customer_share=%s top_product_share=%s analytics_hits=%s document_hits=%s execution_time_ms=%.2f',
+                route_selected,
+                response_source,
+                True,
+                len(executive_insights.get('risk_flags', [])),
+                executive_insights.get('top_customer_share'),
+                executive_insights.get('top_product_share'),
+                analytics_hits,
+                document_hits,
+                execution_time_ms,
+            )
+        elif document_mode and document_insights is not None:
+            self._logger.info(
+                'route_selected=%s response_source=%s document_mode=%s top_document=%s confidence_level=%s total_matches=%s average_score=%s analytics_hits=%s document_hits=%s execution_time_ms=%.2f',
+                route_selected,
+                response_source,
+                True,
+                document_insights.get('top_document'),
+                document_insights.get('confidence_level'),
+                document_insights.get('total_matches'),
+                document_insights.get('average_score'),
+                analytics_hits,
+                document_hits,
+                execution_time_ms,
+            )
+        else:
+            self._logger.info(
+                'route_selected=%s response_source=%s analytics_hits=%s document_hits=%s execution_time_ms=%.2f',
+                route_selected,
+                response_source,
+                analytics_hits,
+                document_hits,
+                execution_time_ms,
+            )
+        return AssistantResult(source=response_source, answer=answer.strip())
+
+    def analyze_hybrid(self, question: str) -> HybridAnalysisResult:
+        hybrid_context = self._hybrid_context_service.build_context(question)
+        hybrid_insights = self._hybrid_insights_service.build_insights(question, hybrid_context)
+        document_hits = int(hybrid_context.document_context.get('total_matches', 0))
+        executive_insights = hybrid_context.executive_insights
+        insights_payload = self._build_hybrid_logging_payload(hybrid_insights, document_hits, executive_insights)
+        answer = self._ai_response_service.generate_hybrid_business_analysis(
+            question=question,
+            hybrid_context=hybrid_context.to_dict(),
+            hybrid_insights=hybrid_insights.to_dict(),
+        )
+        self._logger.info(
+            'hybrid_mode=%s analytics_used=%s documents_used=%s executive_used=%s cross_source_findings_count=%s confidence=%s',
+            True,
+            True,
+            insights_payload['documents_used'],
+            insights_payload['executive_used'],
+            len(hybrid_insights.cross_source_findings),
+            hybrid_insights.confidence,
+        )
+        return HybridAnalysisResult(
+            confidence=hybrid_insights.confidence,
+            sources=hybrid_insights.related_documents,
+            answer=answer.strip(),
+        )
+
+    def _answer_analytics(self, question: str) -> str:
+        snapshot = self._analytics_context_service.build_snapshot().to_dict()
+        return self._ai_response_service.generate_business_analysis(question=question, snapshot=snapshot)
+
+    def _answer_executive(self, question: str) -> tuple[str, dict[str, object]]:
+        snapshot = self._analytics_context_service.build_snapshot().to_dict()
+        executive_insights = snapshot.get('executive_insights', {})
+        answer = self._ai_response_service.generate_executive_summary(question=question, snapshot=snapshot)
+        return answer, executive_insights
+
+    def _answer_hybrid(self, question: str) -> tuple[str, int, int, dict[str, object]]:
+        hybrid_context = self._hybrid_context_service.build_context(question)
+        hybrid_insights = self._hybrid_insights_service.build_insights(question, hybrid_context)
+        document_hits = int(hybrid_context.document_context.get('total_matches', 0))
+        insights_payload = self._build_hybrid_logging_payload(
+            hybrid_insights,
+            document_hits,
+            hybrid_context.executive_insights,
+        )
+        answer = self._ai_response_service.generate_hybrid_business_analysis(
+            question=question,
+            hybrid_context=hybrid_context.to_dict(),
+            hybrid_insights=hybrid_insights.to_dict(),
+        )
+        return answer, 1, document_hits, insights_payload
+
+    def _answer_from_documents(self, question: str) -> tuple[str, int, dict[str, object] | None]:
+        document_context = self._document_context_service.build_context(question)
+        if document_context.total_matches == 0:
+            return _EMPTY_DOCUMENT_CONTEXT_ANSWER, 0, {
+                'total_matches': 0,
+                'confidence_level': 'LOW',
+                'top_document': None,
+                'source_documents': [],
+                'average_score': 0.0,
+            }
+        document_insights = self._document_insights_service.build_insights(document_context)
+        answer = self._ai_response_service.generate_document_analysis(
+            question=question,
+            document_context=document_context.to_dict(),
+            document_insights=document_insights.to_dict(),
+        )
+        return answer, document_context.total_matches, document_insights.to_dict()
+
+    @staticmethod
+    def _build_hybrid_logging_payload(
+        hybrid_insights: object,
+        document_hits: int,
+        executive_insights: dict[str, object],
+    ) -> dict[str, object]:
+        findings = getattr(hybrid_insights, 'cross_source_findings', [])
+        confidence = getattr(hybrid_insights, 'confidence', 'LOW')
+        return {
+            'cross_source_findings': list(findings),
+            'confidence': confidence,
+            'documents_used': document_hits > 0,
+            'executive_used': bool(executive_insights),
+        }

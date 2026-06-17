@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from app.domain.executive_insights import ExecutiveInsights
+
 @dataclass(frozen=True)
 class AnalyticsDateRange:
     start_date: str | None
@@ -41,6 +43,7 @@ class AnalyticsContextSnapshot:
     date_range: AnalyticsDateRange
     insights: AnalyticsInsights
     financials: dict[str, Any]
+    executive_insights: ExecutiveInsights
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -50,4 +53,5 @@ class AnalyticsContextSnapshot:
             'date_range': self.date_range.to_dict(),
             'insights': self.insights.to_dict(),
             'financials': self.financials,
+            'executive_insights': self.executive_insights.to_dict(),
         }

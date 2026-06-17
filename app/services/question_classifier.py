@@ -32,9 +32,6 @@ class QuestionClassifier:
         'como esta distribuida',
         'distribucion de la cartera',
         'distribuida nuestra cartera',
-        'que observas',
-        'observas en las ventas',
-        'resumen ejecutivo',
         'concentra mas compras',
         'concentran mas',
         'mas relevantes',
@@ -51,6 +48,36 @@ class QuestionClassifier:
         'distribuido el ingreso',
         'distribucion del ingreso',
         'mayor facturacion',
+    )
+    _EXECUTIVE_PHRASES = (
+        'dame un resumen ejecutivo',
+        'resumen ejecutivo',
+        'que observas en las ventas',
+        'que hallazgos importantes ves',
+        'hallazgos importantes',
+        'hay riesgos comerciales',
+        'riesgos comerciales',
+        'dependemos de pocos clientes',
+        'existe concentracion comercial',
+        'concentracion comercial',
+        'que te llama la atencion',
+        'que observas',
+        'que hallazgos ves',
+        'que te llama la atencion de las ventas',
+    )
+
+    _ADVANCED_HYBRID_PHRASES = (
+        'cuantos clientes tenemos y como se registran',
+        'cliente genera mas ingresos y cual es el procedimiento',
+        'cliente genera mas ingresos y que documentacion',
+        'producto principal y que documentacion existe',
+        'producto principal y que documentacion',
+        'observas en ventas considerando los procedimientos',
+        'riesgos comerciales observas y que documentos',
+        'riesgos comerciales y que documentos',
+        'metricas y procedimiento',
+        'ingresos y procedimiento',
+        'ingresos y documentacion',
     )
 
     _ANALYTICS_INTENTS = frozenset({
@@ -83,7 +110,21 @@ class QuestionClassifier:
             return ChatIntent.SALES_COUNT
         return ChatIntent.UNKNOWN
 
+    def is_executive_question(self, question: str) -> bool:
+        normalized = self._normalize(question)
+        if any(phrase in normalized for phrase in self._EXECUTIVE_PHRASES):
+            return True
+        if 'resumen' in normalized and 'ejecutivo' in normalized:
+            return True
+        if 'riesgo' in normalized and any(token in normalized for token in ('comercial', 'comerciales', 'venta', 'ventas')):
+            return True
+        if 'dependemos' in normalized and 'cliente' in normalized:
+            return True
+        return False
+
     def is_analytics_question(self, question: str) -> bool:
+        if self.is_executive_question(question):
+            return True
         if self.resolve_intent(question) in self._ANALYTICS_INTENTS:
             return True
         normalized = self._normalize(question)
@@ -95,8 +136,24 @@ class QuestionClassifier:
             return True
         return False
 
+    def is_advanced_hybrid(self, question: str) -> bool:
+        normalized = self._normalize(question)
+        if any(phrase in normalized for phrase in self._ADVANCED_HYBRID_PHRASES):
+            return True
+        if 'genera mas ingresos' in normalized and any(token in normalized for token in ('procedimiento', 'documentacion', 'manual')):
+            return True
+        if 'producto principal' in normalized and 'documentacion' in normalized:
+            return True
+        if 'riesgos comerciales' in normalized and 'documento' in normalized:
+            return True
+        if 'observas' in normalized and 'venta' in normalized and any(token in normalized for token in ('procedimiento', 'manual', 'documento')):
+            return True
+        return False
+
     def is_hybrid(self, question: str) -> bool:
-        if not self.is_analytics_question(question):
+        if self.is_advanced_hybrid(question):
+            return True
+        if not (self.is_analytics_question(question) or self.is_executive_question(question)):
             return False
         normalized = self._normalize(question)
         return any(keyword in normalized for keyword in self._DOCUMENT_SIGNAL_KEYWORDS)

@@ -7,6 +7,7 @@ from app.domain.analytics_context import (
     CustomerConcentration,
 )
 from app.services.analytics_service import AnalyticsService
+from app.services.executive_insights_service import ExecutiveInsightsService
 from app.services.financial_analytics_service import FinancialAnalyticsService
 
 class AnalyticsContextService:
@@ -15,11 +16,13 @@ class AnalyticsContextService:
         self,
         analytics_service: AnalyticsService,
         financial_analytics_service: FinancialAnalyticsService,
+        executive_insights_service: ExecutiveInsightsService | None = None,
         top_customers_limit: int = 10,
         top_products_limit: int = 10,
     ):
         self._analytics = analytics_service
         self._financial_analytics = financial_analytics_service
+        self._executive_insights = executive_insights_service or ExecutiveInsightsService()
         self._top_customers_limit = top_customers_limit
         self._top_products_limit = top_products_limit
 
@@ -32,6 +35,7 @@ class AnalyticsContextService:
         ventas_por_cliente = self._analytics.ventas_por_cliente()
         financials = self._build_financials()
         insights = self._build_insights(ventas_por_cliente, summary.total_amount, financials)
+        executive_insights = self._executive_insights.build_from_financials(financials)
         return AnalyticsContextSnapshot(
             summary={
                 'total_customers': total_customers,
@@ -58,6 +62,7 @@ class AnalyticsContextService:
             ),
             insights=insights,
             financials=financials,
+            executive_insights=executive_insights,
         )
 
     def _build_financials(self) -> dict[str, object]:
